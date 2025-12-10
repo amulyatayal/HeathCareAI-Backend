@@ -194,6 +194,7 @@ if __name__ == "__main__":
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
+        reload_dirs=["api", "config", "models", "services", "utils"] if settings.debug else None,
         log_level=settings.log_level.lower()
     )
 
