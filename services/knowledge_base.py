@@ -404,16 +404,28 @@ class KnowledgeBaseService:
 _knowledge_base: Optional[KnowledgeBaseService] = None
 
 
-def get_knowledge_base(use_vectors: bool = True) -> KnowledgeBaseService:
+def get_knowledge_base(use_vectors: bool = True, index_name: str = None) -> KnowledgeBaseService:
     """Get knowledge base service singleton with hybrid search enabled
     
     Args:
         use_vectors: Whether to use vector/hybrid search (default: True)
                     Requires VECTOR SEARCH collection type in OpenSearch Serverless
+        index_name: Custom index name (default: from settings)
     """
     global _knowledge_base
+    
+    # Create a unique key for this instance
+    cache_key = f"{index_name or settings.opensearch_index}_{use_vectors}"
+    
     if _knowledge_base is None:
-        _knowledge_base = KnowledgeBaseService(use_vectors=use_vectors)
-        logger.info(f"Initialized KnowledgeBaseService (vectors={use_vectors})")
-    return _knowledge_base
+        _knowledge_base = {}
+    
+    if cache_key not in _knowledge_base:
+        _knowledge_base[cache_key] = KnowledgeBaseService(
+            use_vectors=use_vectors,
+            index_name=index_name
+        )
+        logger.info(f"Initialized KnowledgeBaseService (index={index_name or 'default'}, vectors={use_vectors})")
+    
+    return _knowledge_base[cache_key]
 
