@@ -20,7 +20,12 @@ def get_bedrock_client():
 
 
 def get_opensearch_client():
-    """Get OpenSearch client for knowledge base queries"""
+    """Get OpenSearch client for knowledge base queries
+    
+    Supports two authentication methods:
+    1. Username/Password - for managed OpenSearch clusters
+    2. AWS SigV4 - for OpenSearch Serverless (aoss)
+    """
     if not settings.opensearch_endpoint:
         raise ValueError("OpenSearch endpoint not configured")
     
@@ -28,27 +33,30 @@ def get_opensearch_client():
     endpoint = settings.opensearch_endpoint
     endpoint = endpoint.replace('https://', '').replace('http://', '')
     
-    # Detect if this is OpenSearch Serverless (aoss) or regular OpenSearch
-    service = 'aoss' if 'aoss.amazonaws.com' in endpoint else 'es'
-    
-    # Get AWS credentials for signing requests
-    credentials = boto3.Session(
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key,
-        region_name=settings.aws_region
-    ).get_credentials()
-    
-    awsauth = AWS4Auth(
-        credentials.access_key,
-        credentials.secret_key,
-        settings.aws_region,
-        service,  # 'aoss' for Serverless, 'es' for regular OpenSearch
-        session_token=credentials.token
-    )
+    # Use username/password if provided (managed cluster)
+    if settings.opensearch_username and settings.opensearch_password:
+        http_auth = (settings.opensearch_username, settings.opensearch_password)
+    else:
+        # Fall back to AWS SigV4 for Serverless
+        service = 'aoss' if 'aoss.amazonaws.com' in endpoint else 'es'
+        
+        credentials = boto3.Session(
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+            region_name=settings.aws_region
+        ).get_credentials()
+        
+        http_auth = AWS4Auth(
+            credentials.access_key,
+            credentials.secret_key,
+            settings.aws_region,
+            service,
+            session_token=credentials.token
+        )
     
     return OpenSearch(
         hosts=[{'host': endpoint, 'port': 443}],
-        http_auth=awsauth,
+        http_auth=http_auth,
         use_ssl=True,
         verify_certs=True,
         connection_class=RequestsHttpConnection,
@@ -94,4 +102,10 @@ def s3():
     if _s3_client is None:
         _s3_client = get_s3_client()
     return _s3_client
+
+
+def reset_opensearch_client():
+    """Reset OpenSearch client (useful when switching between environments)"""
+    global _opensearch_client
+    _opensearch_client = None
 

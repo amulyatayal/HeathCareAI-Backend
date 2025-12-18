@@ -59,37 +59,69 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
     user_id: Optional[str] = Field(None, description="User identifier for personalization")
     include_sources: bool = Field(True, description="Include source citations in response")
+    index_name: Optional[str] = Field(
+        None,
+        description="OpenSearch index to search. Get available indexes from GET /api/v1/knowledge/indexes"
+    )
+    strict_mode: bool = Field(
+        True,
+        description="If True, only answers from knowledge base (refuses if no evidence). If False, uses general AI with knowledge base context."
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
                 "message": "What are the common side effects of chemotherapy?",
                 "session_id": "abc123",
-                "include_sources": True
+                "include_sources": True,
+                "index_name": "breast_cancer_knowledge",
+                "strict_mode": True
             }
         }
 
 
 class SourceCitation(BaseModel):
-    """Citation for a knowledge base source"""
-    title: str
+    """Citation for a knowledge base source with full text for popup display"""
+    title: str  # Readable title (e.g., "Chemotherapy for Breast Cancer")
     content_type: ContentType
     relevance_score: float
-    source_url: Optional[str] = None
-    excerpt: Optional[str] = None
+    source_url: Optional[str] = None  # Original filename
+    excerpt: Optional[str] = None  # Short excerpt (for inline display)
+    
+    # Enhanced fields for UI popup
+    source_text: Optional[str] = None  # Full chunk text (for popup/modal display)
+    document_name: Optional[str] = None  # Clean document name
+    page_start: Optional[int] = None  # Starting page number
+    page_end: Optional[int] = None  # Ending page number
+    section: Optional[str] = None  # Section heading if available
+    
+    # Display-ready summary for frontend
+    display_summary: Optional[str] = None  # e.g., "Information about exercises and recovery"
 
 
 class ChatResponse(BaseModel):
     """Response from the AI agent"""
-    answer: str
+    answer: str  # Main answer content (without disclaimer or sources)
     session_id: str
     query_category: QueryCategory
     sources: List[SourceCitation] = []
     confidence_score: float = Field(ge=0, le=1)
     response_time_ms: float
+    
+    # Disclaimer as separate field for frontend styling (bold, different font)
     disclaimer: str = Field(
         default="This information is for educational purposes only and should not replace professional medical advice. Please consult your healthcare provider for personalized guidance."
     )
+    
+    # Sources section heading for frontend styling (different font/style)
+    sources_heading: str = Field(default="Sources consulted")
+    
+    # Indicates if answer was generated from knowledge base or is a refusal
+    has_sufficient_evidence: bool = Field(default=True)
+    
+    # Helpline info for easy frontend rendering
+    support_helpline: str = Field(default="0808 800 6000")
+    support_helpline_name: str = Field(default="Breast Cancer Now")
     
     class Config:
         json_schema_extra = {
@@ -97,10 +129,24 @@ class ChatResponse(BaseModel):
                 "answer": "Common side effects of chemotherapy include fatigue, nausea, hair loss...",
                 "session_id": "abc123",
                 "query_category": "side_effects",
-                "sources": [],
+                "sources": [
+                    {
+                        "title": "Chemotherapy for Breast Cancer (pages 15-17)",
+                        "content_type": "medical_article",
+                        "relevance_score": 8.5,
+                        "source_url": "bcc17-chemotherapy-for-breast-cancer-web.pdf",
+                        "source_text": "Full text of the source chunk for popup display...",
+                        "document_name": "Chemotherapy for Breast Cancer",
+                        "page_start": 15,
+                        "page_end": 17
+                    }
+                ],
                 "confidence_score": 0.85,
                 "response_time_ms": 1250.5,
-                "disclaimer": "This information is for educational purposes only..."
+                "disclaimer": "This information is for educational purposes only...",
+                "has_sufficient_evidence": True,
+                "support_helpline": "0808 800 6000",
+                "support_helpline_name": "Breast Cancer Now"
             }
         }
 

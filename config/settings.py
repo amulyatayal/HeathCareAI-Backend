@@ -17,9 +17,11 @@ class Settings(BaseSettings):
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     
-    # OpenSearch Configuration
+    # OpenSearch Configuration (Managed Cluster)
     opensearch_endpoint: str = ""
     opensearch_index: str = "breast_cancer_knowledge"
+    opensearch_username: Optional[str] = None
+    opensearch_password: Optional[str] = None
     
     # Bedrock Configuration
     bedrock_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"

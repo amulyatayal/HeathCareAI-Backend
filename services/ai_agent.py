@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 # ================================
-# System Prompt
+# System Prompts
 # ================================
 
+# Legacy prompt for general conversations (kept for backward compatibility)
 BREAST_CANCER_COMPANION_PROMPT = """You are a compassionate and knowledgeable healthcare companion AI assistant specializing in breast cancer support. Your role is to provide accurate, empathetic, and helpful information to breast cancer patients and their caregivers.
 
 ## Your Guidelines:
@@ -69,6 +70,62 @@ End responses with a reminder that this information is educational and patients 
 {question}
 
 Please provide a helpful, empathetic response:"""
+
+
+# ================================
+# STRICT RAG PROMPT (Evidence-Based Only)
+# ================================
+
+STRICT_RAG_PROMPT = """You are a compassionate healthcare companion AI assistant specializing in breast cancer support. You provide accurate, empathetic information to patients and caregivers.
+
+## CRITICAL RULES:
+1. **ONLY use information from the provided source chunks below**
+2. **DO NOT add any information from your training data**
+3. **DO NOT make up, infer, or extrapolate beyond what is explicitly stated**
+4. **Be warm, supportive, and acknowledge the patient's concerns**
+5. **If the answer is not in the sources, say you don't have that information**
+
+## RESPONSE FORMAT:
+
+### ANSWER
+Start with an empathetic acknowledgment of the patient's question.
+Then provide your answer based ONLY on the source chunks.
+Organize the information clearly with headings and bullet points where appropriate.
+DO NOT include any disclaimer.
+
+After a line with just "---" provide source summaries:
+
+### SOURCES CONSULTED
+For each source document you used, write one line in this format:
+- **[Document Name]**: Brief summary of what information was found (1-2 sentences)
+
+## SOURCE CHUNKS:
+{chunks}
+
+## PATIENT QUESTION:
+{question}
+
+## YOUR RESPONSE:"""
+
+
+# Insufficient evidence response
+INSUFFICIENT_EVIDENCE_RESPONSE = """I understand you're looking for information, and I want to help. Unfortunately, I don't have specific information about this topic in my medical leaflets.
+
+I know it can be frustrating when you need answers. Here's what I'd suggest:
+
+**Your healthcare team is best placed to help:**
+- Your breast care nurse can provide personalized guidance
+- Your oncologist or surgeon can answer treatment-specific questions
+- Your GP is available for general health concerns
+
+**Additional support:**
+- Breast Cancer Now's free helpline: **0808 800 6000** (staffed by nurses and trained staff)
+- They offer confidential support and can answer many questions
+
+I'm here to help with questions about breast cancer topics covered in my knowledge base - things like treatments, side effects, exercises, emotional support, and recovery. Is there something else I can help you with?
+
+---
+*Please always consult your healthcare team for advice specific to your situation.*"""
 
 
 # ================================
@@ -307,26 +364,284 @@ Content: {source.get('content', '')[:500]}...
         
         # Cap at 0.95 (never claim 100% confidence for medical info)
         return min(confidence, 0.95)
+    
+    def _format_chunks_for_prompt(self, chunks: List[Dict[str, Any]]) -> str:
+        """Format chunks for the strict RAG prompt with clean document names"""
+        if not chunks:
+            return "No source documents available."
+        
+        formatted = []
+        for i, chunk in enumerate(chunks, 1):
+            source_file = chunk.get('source_file', 'Unknown')
+            page_start = chunk.get('page_start', '?')
+            page_end = chunk.get('page_end', '?')
+            section = chunk.get('section', '')
+            content = chunk.get('content', '')
+            
+            # Create clean document name for LLM to reference in source summaries
+            clean_name = source_file.replace(".pdf", "").replace("-", " ").replace("_", " ")
+            clean_name = clean_name.replace("web pdf", "").replace("web", "").strip()
+            clean_name = " ".join(word.capitalize() for word in clean_name.split())
+            
+            section_text = f"\nSection: {section}" if section else ""
+            
+            formatted.append(f"""
+[Document: {clean_name}]
+Pages: {page_start}-{page_end}{section_text}
+{content}
+""")
+        
+        return "\n---\n".join(formatted)
+    
+    async def generate_response_from_chunks(
+        self,
+        question: str,
+        chunks: List[Dict[str, Any]],
+        has_sufficient_evidence: bool
+    ) -> Tuple[str, float, List[Dict[str, Any]]]:
+        """
+        Generate response using ONLY the provided chunks (strict RAG).
+        Uses temperature=0 for factual accuracy.
+        
+        Args:
+            question: User's question
+            chunks: Retrieved chunks with content and metadata
+            has_sufficient_evidence: Whether evidence gating passed
+        
+        Returns:
+            Tuple of (response_text, confidence_score, citations)
+        """
+        start_time = time.time()
+        
+        # If insufficient evidence, return canned response
+        if not has_sufficient_evidence:
+            logger.info("Insufficient evidence - returning canned response")
+            return INSUFFICIENT_EVIDENCE_RESPONSE, 0.3, []
+        
+        # Format chunks for prompt
+        chunks_text = self._format_chunks_for_prompt(chunks)
+        
+        prompt = STRICT_RAG_PROMPT.format(
+            chunks=chunks_text,
+            question=question
+        )
+        
+        try:
+            client = self._get_client()
+            
+            # Build request with temperature=0 for factual responses
+            if self._is_nova_model():
+                body = json.dumps({
+                    "inferenceConfig": {
+                        "max_new_tokens": 1500,
+                        "temperature": 0.0  # Strictly factual
+                    },
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [{"text": prompt}]
+                        }
+                    ]
+                })
+            else:
+                body = json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1500,
+                    "temperature": 0.0,  # Strictly factual
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                })
+            
+            response = client.invoke_model(
+                modelId=self.model_id,
+                body=body
+            )
+            
+            response_body = json.loads(response['body'].read())
+            
+            # Parse response based on model type
+            if self._is_nova_model():
+                raw_response = response_body['output']['message']['content'][0]['text']
+            else:
+                raw_response = response_body['content'][0]['text']
+            
+            # Parse the response to separate answer from source summaries
+            answer = raw_response
+            source_summaries = {}  # Map document name -> summary
+            
+            # Try multiple separator patterns
+            separators = ["---SOURCES---", "### SOURCES CONSULTED", "## SOURCES CONSULTED", 
+                          "### SOURCE SUMMARIES", "## SOURCE SUMMARIES", "SOURCES CONSULTED",
+                          "---\n\n### SOURCES", "---\n### SOURCES"]
+            
+            for sep in separators:
+                if sep.lower() in raw_response.lower():
+                    # Find the separator case-insensitively
+                    lower_response = raw_response.lower()
+                    sep_pos = lower_response.find(sep.lower())
+                    if sep_pos > 0:
+                        answer = raw_response[:sep_pos].strip()
+                        summaries_text = raw_response[sep_pos + len(sep):].strip()
+                        
+                        # Parse source summaries - handle various LLM output formats
+                        import re
+                        for line in summaries_text.split('\n'):
+                            line = line.strip()
+                            if not line or line.startswith('#'):
+                                continue
+                            
+                            # Remove leading bullet points and asterisks
+                            line = line.lstrip('-').lstrip('*').strip()
+                            
+                            doc_name = None
+                            summary = None
+                            
+                            # Format: **[Document Name: Actual Name]**: Summary
+                            match = re.search(r'\[Document(?:\s+Name)?:\s*([^\]]+)\]', line)
+                            if match:
+                                doc_name = match.group(1).strip()
+                                rest = line[match.end():].strip()
+                                summary = rest.lstrip('*:').strip()
+                            # Format: **[Doc Name]**: Summary
+                            elif '[' in line and ']' in line:
+                                start = line.find('[')
+                                end = line.find(']')
+                                if end > start:
+                                    doc_name = line[start+1:end].strip()
+                                    summary = line[end+1:].strip().lstrip(':*').strip()
+                            # Format: Doc Name: Summary (simple)
+                            elif ':' in line and len(line.split(':')[0]) < 80:
+                                colon_pos = line.find(':')
+                                doc_name = line[:colon_pos].strip().strip('*[]')
+                                summary = line[colon_pos+1:].strip()
+                            
+                            if doc_name and summary and len(doc_name) < 100:
+                                source_summaries[doc_name.lower().strip()] = summary
+                                logger.debug(f"Parsed: '{doc_name}' -> {summary[:50]}...")
+                        break
+            
+            # Clean up answer - remove section headers
+            answer = answer.replace("### Section 1: ANSWER", "").strip()
+            answer = answer.replace("## Section 1: ANSWER", "").strip()
+            answer = answer.replace("Section 1: ANSWER", "").strip()
+            answer = answer.replace("### ANSWER", "").strip()
+            answer = answer.replace("## ANSWER", "").strip()
+            # Remove trailing --- separator
+            if answer.endswith("---"):
+                answer = answer[:-3].strip()
+            
+            logger.info(f"Parsed {len(source_summaries)} source summaries from LLM response")
+            
+            # Extract citations grouped by source document with full text
+            source_docs = {}  # Group chunks by source file
+            
+            for chunk in chunks:
+                source_file = chunk.get('source_file', 'Unknown')
+                if source_file not in source_docs:
+                    source_docs[source_file] = {
+                        "source_file": source_file,
+                        "page_start": chunk.get('page_start', 1),
+                        "page_end": chunk.get('page_end', 1),
+                        "sections": [],
+                        "relevance_scores": [],
+                        "chunk_contents": []  # Store full chunk content for popup
+                    }
+                
+                # Update page range to cover all chunks from this document
+                doc = source_docs[source_file]
+                doc["page_start"] = min(doc["page_start"], chunk.get('page_start', 1))
+                doc["page_end"] = max(doc["page_end"], chunk.get('page_end', 1))
+                
+                # Collect sections, scores, and full content
+                if chunk.get('section') and chunk['section'] not in doc["sections"]:
+                    doc["sections"].append(chunk['section'])
+                doc["relevance_scores"].append(chunk.get('relevance_score', 0))
+                
+                # Store chunk content for popup display
+                if chunk.get('content'):
+                    doc["chunk_contents"].append(chunk['content'])
+            
+            # Convert to citations list with full text for popups
+            citations = []
+            for source_file, doc in source_docs.items():
+                avg_score = sum(doc["relevance_scores"]) / len(doc["relevance_scores"]) if doc["relevance_scores"] else 0
+                
+                # Combine chunk contents for popup (limit to prevent huge payloads)
+                combined_text = "\n\n---\n\n".join(doc["chunk_contents"][:5])  # Max 5 chunks per source
+                if len(doc["chunk_contents"]) > 5:
+                    combined_text += f"\n\n... and {len(doc['chunk_contents']) - 5} more excerpts"
+                
+                # Create clean document name
+                clean_name = source_file.replace(".pdf", "").replace("-", " ").replace("_", " ")
+                clean_name = clean_name.replace("web pdf", "").replace("web", "").strip()
+                clean_name = " ".join(word.capitalize() for word in clean_name.split())
+                
+                # Look up LLM-generated summary for this document
+                llm_summary = None
+                clean_name_lower = clean_name.lower()
+                for key, summary in source_summaries.items():
+                    # Match by substring to handle slight naming differences
+                    if key in clean_name_lower or clean_name_lower in key:
+                        llm_summary = summary
+                        break
+                
+                citations.append({
+                    "source_file": doc["source_file"],
+                    "document_name": clean_name,
+                    "page_start": doc["page_start"],
+                    "page_end": doc["page_end"],
+                    "section": "; ".join(doc["sections"][:2]) if doc["sections"] else None,
+                    "relevance_score": avg_score,
+                    "source_text": combined_text,  # Full text for popup
+                    "display_summary": llm_summary  # LLM-generated summary of what was found
+                })
+            
+            # Calculate confidence based on evidence quality
+            avg_score = sum(c.get('relevance_score', 0) for c in chunks) / len(chunks) if chunks else 0
+            confidence = min(0.95, 0.5 + (avg_score / 20))  # Scale to 0.5-0.95
+            
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info(f"Generated strict RAG response in {elapsed_ms:.0f}ms with {len(citations)} citations")
+            
+            return answer, confidence, citations
+            
+        except Exception as e:
+            logger.error(f"Error generating strict RAG response: {e}")
+            raise
 
 
 # ================================
-# Main Chat Function
+# Main Chat Function (Strict RAG)
 # ================================
 
 async def chat_with_agent(
     message: str,
     session_id: Optional[str] = None,
     user_id: Optional[str] = None,
-    include_sources: bool = True
+    include_sources: bool = True,
+    use_strict_rag: bool = True,
+    index_name: Optional[str] = None
 ) -> ChatResponse:
     """
-    Main function to chat with the breast cancer companion agent
+    Main function to chat with the breast cancer companion agent.
+    
+    Uses STRICT RAG by default:
+    - Only answers from knowledge base chunks
+    - Returns "I don't have that information" if evidence is insufficient
+    - Includes citations with source file, page numbers
+    - Uses temperature=0 for factual accuracy
     
     Args:
         message: User's question or message
         session_id: Optional session ID for conversation continuity
         user_id: Optional user ID for personalization
         include_sources: Whether to include source citations
+        use_strict_rag: Use strict RAG with evidence gating (default: True)
+        index_name: OpenSearch index to search (default: breast_cancer_knowledge)
     
     Returns:
         ChatResponse with answer, sources, and metadata
@@ -343,49 +658,160 @@ async def chat_with_agent(
     query_category = classify_query(message)
     logger.info(f"Query classified as: {query_category}")
     
-    # Get conversation history
-    history = SessionManager.get_history(session_id)
-    
-    # Search knowledge base for relevant sources using hybrid search
-    from services.knowledge_base import get_knowledge_base
-    try:
-        kb = get_knowledge_base(use_vectors=True)  # Enable hybrid search (vector + keyword)
-        knowledge_context = await kb.get_relevant_context(
-            query=message,
-            category=query_category,
-            limit=5
-        )
-        knowledge_sources = knowledge_context
-        logger.info(f"Retrieved {len(knowledge_sources)} knowledge sources via hybrid search")
-    except Exception as e:
-        logger.warning(f"Failed to retrieve knowledge sources: {e}")
-        knowledge_sources = []
-    
-    # Generate AI response
+    # Initialize agent
     agent = BreastCancerCompanionAgent()
-    answer, confidence = await agent.generate_response(
-        question=message,
-        session_id=session_id,
-        knowledge_sources=knowledge_sources,
-        conversation_history=history[:-1]  # Exclude current message
-    )
+    
+    # Use default index if not specified
+    # Default to breast_cancer_knowledge (PDF chunks) - ignore settings as it may be outdated
+    if not index_name:
+        index_name = "breast_cancer_knowledge"
+    
+    # Get knowledge base
+    from services.knowledge_base import KnowledgeBaseService
+    kb = KnowledgeBaseService(use_vectors=True, index_name=index_name)
+    
+    if use_strict_rag:
+        # ========================================
+        # STRICT RAG MODE (Evidence-Based Only)
+        # ========================================
+        logger.info(f"Using STRICT RAG mode with index: {index_name}")
+        
+        try:
+            # Search for relevant chunks with evidence gating
+            # Note: min_score=2.0 works for both PDF chunks and Q&A pairs
+            rag_result = await kb.search_chunks_for_rag(
+                query=message,
+                limit=15,  # Get 15 chunks
+                min_chunks=2,  # Require at least 2 good chunks
+                min_score=2.0,  # Minimum relevance score (lowered for Q&A compatibility)
+                require_keyword_match=True  # Require keyword overlap
+            )
+            
+            chunks = rag_result["chunks"]
+            has_sufficient_evidence = rag_result["has_sufficient_evidence"]
+            evidence_stats = rag_result["evidence_stats"]
+            
+            logger.info(
+                f"RAG search: {len(chunks)} chunks, "
+                f"sufficient_evidence={has_sufficient_evidence}, "
+                f"stats={evidence_stats}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to search chunks: {e}")
+            chunks = []
+            has_sufficient_evidence = False
+            evidence_stats = {"error": str(e)}
+        
+        # Generate response from chunks with strict prompt
+        answer, confidence, citations = await agent.generate_response_from_chunks(
+            question=message,
+            chunks=chunks,
+            has_sufficient_evidence=has_sufficient_evidence
+        )
+        
+        # Format citations for response - grouped by document with full text
+        sources = []
+        if include_sources and citations:
+            # Sort by relevance score descending
+            sorted_citations = sorted(citations, key=lambda x: x.get("relevance_score", 0), reverse=True)
+            
+            for citation in sorted_citations:
+                source_file = citation.get("source_file", "Unknown")
+                page_start = citation.get("page_start", 1)
+                page_end = citation.get("page_end", 1)
+                document_name = citation.get("document_name", source_file)
+                
+                # Format page range for title
+                if page_start == page_end:
+                    page_info = f"page {page_start}"
+                else:
+                    page_info = f"pages {page_start}-{page_end}"
+                
+                # Use LLM-generated summary if available, otherwise fallback
+                display_summary = citation.get("display_summary")
+                if not display_summary:
+                    source_text = citation.get("source_text", "")
+                    if source_text:
+                        first_sentence = source_text.split('.')[0][:150] if source_text else ""
+                        display_summary = f"Contains information about: {first_sentence}..."
+                    else:
+                        display_summary = f"Medical information from {document_name}"
+                
+                sources.append(SourceCitation(
+                    title=f"{document_name} ({page_info})",
+                    content_type=ContentType.MEDICAL_ARTICLE,
+                    relevance_score=citation.get("relevance_score", 0.0),
+                    source_url=source_file,
+                    excerpt=citation.get("section", "")[:200] if citation.get("section") else "",
+                    # New fields for popup display
+                    source_text=citation.get("source_text", ""),  # Full text for popup
+                    document_name=document_name,
+                    page_start=page_start,
+                    page_end=page_end,
+                    section=citation.get("section"),
+                    display_summary=display_summary  # LLM-generated summary
+                ))
+        
+    else:
+        # ========================================
+        # LEGACY MODE (General AI Response)
+        # ========================================
+        logger.info("Using legacy mode (general AI response)")
+        
+        # Legacy mode always has "sufficient evidence" (no gating)
+        has_sufficient_evidence = True
+        
+        # Get conversation history
+        history = SessionManager.get_history(session_id)
+        
+        try:
+            knowledge_context = await kb.get_relevant_context(
+                query=message,
+                category=query_category,
+                limit=5
+            )
+            knowledge_sources = knowledge_context
+        except Exception as e:
+            logger.warning(f"Failed to retrieve knowledge sources: {e}")
+            knowledge_sources = []
+        
+        answer, confidence = await agent.generate_response(
+            question=message,
+            session_id=session_id,
+            knowledge_sources=knowledge_sources,
+            conversation_history=history[:-1]
+        )
+        
+        # Format sources for response
+        sources = []
+        if include_sources and knowledge_sources:
+            for source in knowledge_sources:
+                sources.append(SourceCitation(
+                    title=source.get("title", "Unknown"),
+                    content_type=ContentType(source.get("content_type", "medical_article")),
+                    relevance_score=source.get("score", 0.0),
+                    source_url=source.get("url"),
+                    excerpt=source.get("content", "")[:200]
+                ))
     
     # Add assistant response to history
     SessionManager.add_message(session_id, "assistant", answer)
     
-    # Format sources for response
-    sources = []
-    if include_sources and knowledge_sources:
-        for source in knowledge_sources:
-            sources.append(SourceCitation(
-                title=source.get("title", "Unknown"),
-                content_type=ContentType(source.get("content_type", "medical_article")),
-                relevance_score=source.get("score", 0.0),
-                source_url=source.get("url"),
-                excerpt=source.get("content", "")[:200]
-            ))
-    
     elapsed_ms = (time.time() - start_time) * 1000
+    
+    # Custom disclaimer based on mode
+    if use_strict_rag:
+        disclaimer_text = (
+            "This information is from our medical leaflets and is for educational purposes only. "
+            "Please consult your healthcare team (breast care nurse, oncologist, or GP) "
+            "for advice specific to your situation."
+        )
+    else:
+        disclaimer_text = (
+            "This information is for educational purposes only and should not replace "
+            "professional medical advice. Please consult your healthcare provider for personalized guidance."
+        )
     
     return ChatResponse(
         answer=answer,
@@ -393,6 +819,10 @@ async def chat_with_agent(
         query_category=query_category,
         sources=sources,
         confidence_score=confidence,
-        response_time_ms=elapsed_ms
+        response_time_ms=elapsed_ms,
+        disclaimer=disclaimer_text,
+        has_sufficient_evidence=has_sufficient_evidence,  # Defined in both branches
+        support_helpline="0 800",
+        support_helpline_name="HealthCareAI Now"
     )
 

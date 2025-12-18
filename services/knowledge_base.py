@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 VECTOR_WEIGHT = 0.7  # Weight for semantic/vector similarity
 KEYWORD_WEIGHT = 0.3  # Weight for keyword matching
 
+# Evidence gating configuration for RAG
+MIN_CHUNKS_REQUIRED = 3  # Minimum chunks needed to generate answer
+MIN_SCORE_THRESHOLD = 5.0  # Minimum relevance score for a chunk
+KEYWORD_MATCH_REQUIRED = True  # Require at least one chunk with keyword match
+
 
 # ================================
 # Embedding Service
@@ -322,6 +327,165 @@ class KnowledgeBaseService:
             
         except Exception as e:
             logger.error(f"Error in hybrid search: {e}")
+            raise
+    
+    async def search_chunks_for_rag(
+        self,
+        query: str,
+        limit: int = 15,
+        min_chunks: int = MIN_CHUNKS_REQUIRED,
+        min_score: float = MIN_SCORE_THRESHOLD,
+        require_keyword_match: bool = KEYWORD_MATCH_REQUIRED
+    ) -> Dict[str, Any]:
+        """
+        Search for chunks optimized for RAG retrieval with evidence gating.
+        
+        This method:
+        1. Retrieves top K chunks using hybrid search (BM25 + vector)
+        2. Applies evidence gating to ensure quality
+        3. Returns chunks with full metadata for citations
+        
+        Args:
+            query: User question
+            limit: Max chunks to retrieve (default 15)
+            min_chunks: Minimum chunks above threshold required (default 3)
+            min_score: Minimum relevance score threshold (default 5.0)
+            require_keyword_match: Require at least one chunk with keyword match
+        
+        Returns:
+            Dict with:
+            - chunks: List of chunk dicts with content and metadata
+            - has_sufficient_evidence: Boolean indicating if evidence is sufficient
+            - evidence_stats: Statistics about the retrieved evidence
+        """
+        start_time = time.time()
+        
+        try:
+            # Create query embedding for vector search
+            query_embedding = self.embedding_service.create_embedding(query)
+            
+            if not query_embedding:
+                raise ValueError("Failed to create query embedding")
+            
+            # Extract keywords from query for keyword match check
+            query_keywords = set(query.lower().split())
+            # Remove common stop words
+            stop_words = {'what', 'how', 'when', 'where', 'why', 'who', 'is', 'are', 
+                          'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and',
+                          'or', 'but', 'with', 'my', 'i', 'me', 'can', 'do', 'does',
+                          'should', 'would', 'could', 'will', 'be', 'have', 'has'}
+            query_keywords = query_keywords - stop_words
+            
+            # Build hybrid search query for chunks
+            hybrid_query = {
+                "size": limit * 2,  # Get extra for filtering
+                "query": {
+                    "bool": {
+                        "should": [
+                            # Vector search component
+                            {
+                                "knn": {
+                                    "embedding": {
+                                        "vector": query_embedding,
+                                        "k": limit * 2
+                                    }
+                                }
+                            },
+                            # Keyword search component
+                            {
+                                "multi_match": {
+                                    "query": query,
+                                    "fields": ["content^2", "section"],
+                                    "type": "best_fields",
+                                    "boost": KEYWORD_WEIGHT / VECTOR_WEIGHT
+                                }
+                            }
+                        ],
+                        "minimum_should_match": 1
+                    }
+                }
+            }
+            
+            # Execute search
+            client = self._get_client()
+            response = client.search(
+                index=self.index_name,
+                body=hybrid_query
+            )
+            
+            # Process results
+            hits = response.get("hits", {}).get("hits", [])
+            chunks = []
+            chunks_above_threshold = 0
+            keyword_match_found = False
+            
+            for hit in hits:
+                source = hit["_source"]
+                score = hit.get("_score", 0.0)
+                content = source.get("content", "")
+                
+                # Check for keyword match
+                content_lower = content.lower()
+                has_keyword_match = any(kw in content_lower for kw in query_keywords)
+                
+                if has_keyword_match:
+                    keyword_match_found = True
+                
+                if score >= min_score:
+                    chunks_above_threshold += 1
+                
+                # Handle both PDF chunks (source_file) and Q&A pairs (source_url)
+                source_file = source.get("source_file") or source.get("source_url") or "Unknown"
+                
+                chunk = {
+                    "chunk_id": source.get("chunk_id", hit["_id"]),
+                    "content": content,
+                    "source_file": source_file,
+                    "title": source.get("title"),  # Q&A pairs have title
+                    "page_start": source.get("page_start", 1),
+                    "page_end": source.get("page_end", 1),
+                    "section": source.get("section"),
+                    "content_type": source.get("content_type", "medical_article"),
+                    "relevance_score": score,
+                    "has_keyword_match": has_keyword_match
+                }
+                chunks.append(chunk)
+                
+                if len(chunks) >= limit:
+                    break
+            
+            # Evidence gating check
+            has_sufficient_evidence = (
+                chunks_above_threshold >= min_chunks and
+                (not require_keyword_match or keyword_match_found)
+            )
+            
+            elapsed_ms = (time.time() - start_time) * 1000
+            
+            evidence_stats = {
+                "total_chunks": len(chunks),
+                "chunks_above_threshold": chunks_above_threshold,
+                "keyword_match_found": keyword_match_found,
+                "min_chunks_required": min_chunks,
+                "min_score_threshold": min_score,
+                "search_time_ms": elapsed_ms
+            }
+            
+            logger.info(
+                f"RAG chunk search: {len(chunks)} chunks, "
+                f"{chunks_above_threshold} above threshold, "
+                f"keyword_match={keyword_match_found}, "
+                f"sufficient_evidence={has_sufficient_evidence}"
+            )
+            
+            return {
+                "chunks": chunks,
+                "has_sufficient_evidence": has_sufficient_evidence,
+                "evidence_stats": evidence_stats
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in RAG chunk search: {e}")
             raise
     
     async def get_relevant_context(
