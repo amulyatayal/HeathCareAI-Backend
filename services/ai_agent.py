@@ -776,8 +776,8 @@ async def chat_with_agent(
         # ========================================
         logger.info("Using legacy mode (general AI response)")
         
-        # Legacy mode always has "sufficient evidence" (no gating)
-        has_sufficient_evidence = True
+        # Legacy mode (KB+AI) is NOT verified from knowledge base only
+        has_sufficient_evidence = False
         
         # Get conversation history
         history = SessionManager.get_history(session_id)
