@@ -120,8 +120,13 @@ class ChatResponse(BaseModel):
     has_sufficient_evidence: bool = Field(default=True)
     
     # Helpline info for easy frontend rendering
-    support_helpline: str = Field(default="0808 800 6000")
-    support_helpline_name: str = Field(default="Breast Cancer Now")
+    support_helpline: str = Field(default="0808 800")
+    support_helpline_name: str = Field(default="HealthCare AI Now")
+    
+    # Conversation tracking for feedback
+    conversation_id: Optional[str] = Field(None, description="Unique ID for this conversation (for feedback)")
+    conversation_created_at: Optional[str] = Field(None, description="ISO timestamp for feedback API")
+    timestamp: Optional[str] = Field(None, description="Response timestamp in ISO format")
     
     class Config:
         json_schema_extra = {
@@ -249,4 +254,33 @@ class SessionSummary(BaseModel):
     topics_discussed: List[str]
     created_at: datetime
     last_active: datetime
+
+
+# ================================
+# Feedback Schemas
+# ================================
+
+class FeedbackRequest(BaseModel):
+    """Request to submit feedback for a conversation"""
+    conversation_id: str = Field(..., description="The conversation ID to provide feedback for")
+    created_at: str = Field(..., description="The created_at timestamp in ISO format (e.g., 2025-01-01T00:00:00Z)")
+    rating: str = Field(..., description="Feedback rating: 'thumbs_up' or 'thumbs_down'")
+    feedback_text: Optional[str] = Field(None, max_length=2000, description="Optional detailed feedback")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "conversation_id": "session123_abc12345",
+                "created_at": "2025-01-01T12:00:00Z",
+                "rating": "thumbs_up",
+                "feedback_text": "Very helpful response!"
+            }
+        }
+
+
+class FeedbackResponse(BaseModel):
+    """Response after submitting feedback"""
+    success: bool
+    message: str
+    conversation_id: str
 

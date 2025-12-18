@@ -109,3 +109,40 @@ def reset_opensearch_client():
     global _opensearch_client
     _opensearch_client = None
 
+
+# ================================
+# DynamoDB Client
+# ================================
+
+_dynamodb_client = None
+_dynamodb_table = None
+
+
+def get_dynamodb_client():
+    """Get DynamoDB client"""
+    return boto3.client(
+        service_name='dynamodb',
+        region_name=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key
+    )
+
+
+def get_dynamodb_table(table_name: str = "ChatConversations"):
+    """Get DynamoDB table resource"""
+    dynamodb = boto3.resource(
+        'dynamodb',
+        region_name=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key
+    )
+    return dynamodb.Table(table_name)
+
+
+def dynamodb():
+    """Get or create DynamoDB client (cached)"""
+    global _dynamodb_client
+    if _dynamodb_client is None:
+        _dynamodb_client = get_dynamodb_client()
+    return _dynamodb_client
+
