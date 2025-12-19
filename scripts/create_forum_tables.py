@@ -144,36 +144,6 @@ def create_forum_votes_table():
             return False
 
 
-def create_forum_user_profiles_table():
-    """
-    Create ForumUserProfiles table (optional - for karma tracking).
-    
-    Primary Key: user_id (PK)
-    """
-    table_name = "ForumUserProfiles"
-    
-    try:
-        response = dynamodb.create_table(
-            TableName=table_name,
-            KeySchema=[
-                {'AttributeName': 'user_id', 'KeyType': 'HASH'},  # Partition key
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'user_id', 'AttributeType': 'S'},
-            ],
-            BillingMode='PAY_PER_REQUEST',
-        )
-        print(f"✓ Created table: {table_name}")
-        return True
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ResourceInUseException':
-            print(f"⚠ Table {table_name} already exists")
-            return True
-        else:
-            print(f"✗ Failed to create {table_name}: {e}")
-            return False
-
-
 def create_chat_conversations_table():
     """
     Create ChatConversations table (for conversation logging).
@@ -212,7 +182,6 @@ def wait_for_tables():
         "ForumPosts",
         "ForumComments", 
         "ForumVotes",
-        "ForumUserProfiles",
         "ChatConversations"
     ]
     
@@ -240,7 +209,6 @@ def main():
     success &= create_forum_posts_table()
     success &= create_forum_comments_table()
     success &= create_forum_votes_table()
-    success &= create_forum_user_profiles_table()
     success &= create_chat_conversations_table()
     
     if success:
@@ -253,7 +221,6 @@ def main():
         print("  - ForumPosts (category_id + created_at)")
         print("  - ForumComments (post_id + created_at)")
         print("  - ForumVotes (user_id + target_key)")
-        print("  - ForumUserProfiles (user_id)")
         print("  - ChatConversations (conversation_id + created_at)")
         print("=" * 60)
     else:

@@ -14,7 +14,7 @@ from models.forum_schemas import (
     ForumCategory, ContentStatus, VoteType,
     PostCreate, PostUpdate, Post, PostSummary,
     CommentCreate, CommentUpdate, Comment,
-    CategoryInfo, ForumUserProfile
+    CategoryInfo
 )
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,6 @@ POSTS_TABLE = "ForumPosts"
 COMMENTS_TABLE = "ForumComments"
 VOTES_TABLE = "ForumVotes"
 CATEGORIES_TABLE = "ForumCategories"
-USER_PROFILES_TABLE = "ForumUserProfiles"
 
 
 class ForumService:
@@ -35,7 +34,6 @@ class ForumService:
         self._comments_table = None
         self._votes_table = None
         self._categories_table = None
-        self._profiles_table = None
     
     @property
     def posts_table(self):
@@ -61,11 +59,6 @@ class ForumService:
             self._categories_table = get_dynamodb_table(CATEGORIES_TABLE)
         return self._categories_table
     
-    @property
-    def profiles_table(self):
-        if self._profiles_table is None:
-            self._profiles_table = get_dynamodb_table(USER_PROFILES_TABLE)
-        return self._profiles_table
 
     # ================================
     # Categories

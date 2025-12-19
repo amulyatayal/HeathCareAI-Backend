@@ -180,22 +180,6 @@ class VoteResponse(BaseModel):
 
 
 # ================================
-# User Profile (Forum-specific)
-# ================================
-
-class ForumUserProfile(BaseModel):
-    """User's forum profile and stats"""
-    user_id: str
-    display_name: str
-    karma: int = 0  # Total upvotes - downvotes received
-    post_count: int = 0
-    comment_count: int = 0
-    joined_at: str
-    badges: List[str] = []  # e.g., ["survivor", "caregiver", "expert"]
-    is_verified_expert: bool = False
-
-
-# ================================
 # Moderation Schemas
 # ================================
 
