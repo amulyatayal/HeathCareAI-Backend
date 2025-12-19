@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from api import chat_router, knowledge_router, health_router, categories_router
+from api import chat_router, knowledge_router, health_router, categories_router, forum_router
 
 # ================================
 # Logging Configuration
@@ -71,6 +71,7 @@ app = FastAPI(
     
     - **💬 Intelligent Chat**: Empathetic AI assistant specialized in breast cancer support
     - **📚 Knowledge Base**: Medical information search with semantic understanding
+    - **🗣️ Community Forum**: Reddit-style discussion forums for peer support
     - **🔒 Safe & Reliable**: Evidence-based responses with appropriate disclaimers
     
     ### Supported Platforms
@@ -159,6 +160,7 @@ app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
 app.include_router(health_router, prefix=settings.api_prefix)
 app.include_router(categories_router, prefix=settings.api_prefix)
+app.include_router(forum_router, prefix=settings.api_prefix)
 
 
 # ================================
