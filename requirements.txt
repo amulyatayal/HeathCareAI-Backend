@@ -38,6 +38,9 @@ langchain-community==0.0.13
 # Database (optional - for session management)
 redis==5.0.1
 
+# Authentication
+PyJWT==2.8.0
+
 # Utilities
 tenacity==8.2.3
 structlog==24.1.0

@@ -6,7 +6,7 @@ Provides endpoints for chat, knowledge base, and health checks
 import logging
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Header, Request as FastAPIRequest
 from fastapi.responses import JSONResponse
 
 from models.schemas import (
@@ -33,12 +33,21 @@ chat_router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 @chat_router.post("/", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(
+    request: ChatRequest,
+    raw_request: FastAPIRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+):
     """
     Chat with the breast cancer companion AI agent.
     
     Send a message and receive an empathetic, informative response
     backed by medical knowledge base.
+    
+    Authentication (via headers):
+    - Authorization: Bearer <token> for Google OAuth users
+    - X-User-ID: guest_xxx for guest users
     
     Options:
     - index_name: Get available indexes from GET /api/v1/knowledge/indexes
@@ -47,10 +56,38 @@ async def chat(request: ChatRequest):
     Returns conversation_id for feedback submission.
     """
     try:
+        # Extract user_id from headers
+        # Debug: Log ALL received headers
+        all_headers = dict(raw_request.headers)
+        logger.info(f"ALL Headers received: {all_headers}")
+        logger.info(f"Parsed - Authorization: {authorization}, X-User-ID: {x_user_id}")
+        
+        user_id = None
+        if authorization and authorization.startswith("Bearer "):
+            # Google OAuth - decode JWT to get user info
+            token = authorization.replace("Bearer ", "")
+            try:
+                import jwt
+                # Decode without verification for user extraction (verification done by frontend)
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
+                logger.info(f"Authenticated user from JWT: {user_id}")
+            except Exception as jwt_error:
+                logger.warning(f"Could not decode JWT: {jwt_error}")
+                user_id = "oauth_user"
+        elif x_user_id:
+            # Guest user with X-User-ID header
+            user_id = x_user_id
+            logger.info(f"Guest user from X-User-ID header: {user_id}")
+        else:
+            # Fallback to request body or anonymous
+            user_id = request.user_id or "anonymous"
+            logger.info(f"Fallback user_id: {user_id} (from request body: {request.user_id})")
+        
         response = await chat_with_agent(
             message=request.message,
             session_id=request.session_id,
-            user_id=request.user_id,
+            user_id=user_id,
             include_sources=request.include_sources,
             index_name=request.index_name,
             use_strict_rag=request.strict_mode
@@ -61,7 +98,7 @@ async def chat(request: ChatRequest):
             conversation_logger = get_conversation_logger()
             log_result = await conversation_logger.log_conversation(
                 session_id=response.session_id,
-                user_id=request.user_id,
+                user_id=user_id,
                 question=request.message,
                 answer=response.answer,
                 query_category=response.query_category.value,
