@@ -198,3 +198,4 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower()
     )
 
+# [SA] - made this change for a trial run. Want to try out the full cycle of making change, commmiting, pushing and merging.
