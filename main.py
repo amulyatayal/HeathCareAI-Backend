@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from api import chat_router, knowledge_router, health_router, categories_router, forum_router
+from api import chat_router, knowledge_router, health_router, categories_router, forum_router, user_router
 
 # ================================
 # Logging Configuration
@@ -161,6 +161,7 @@ app.include_router(knowledge_router, prefix=settings.api_prefix)
 app.include_router(health_router, prefix=settings.api_prefix)
 app.include_router(categories_router, prefix=settings.api_prefix)
 app.include_router(forum_router, prefix=settings.api_prefix)
+app.include_router(user_router, prefix=settings.api_prefix)
 
 
 # ================================
