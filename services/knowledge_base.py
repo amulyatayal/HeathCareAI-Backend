@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from config import settings, bedrock, opensearch
-from models.schemas import (
+from models.schemas_deprecated import (
     KnowledgeDocument, KnowledgeSearchRequest, KnowledgeSearchResponse,
     KnowledgeSearchResult, QueryCategory, ContentType
 )

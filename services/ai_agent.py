@@ -11,7 +11,7 @@ from datetime import datetime
 import uuid
 
 from config import settings, bedrock
-from models.schemas import (
+from models.schemas_deprecated import (
     ChatMessage, ChatResponse, SourceCitation,
     QueryCategory, ContentType, MessageRole
 )

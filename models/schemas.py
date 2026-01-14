@@ -1,286 +1,260 @@
 """
-Pydantic Models for API Request/Response Schemas
-Healthcare Companion App for Breast Cancer Patients
+Pydantic Schemas for Multi-Agent Pipeline
+Defines request/response models and intermediate data structures.
+
+Spec Reference: ProjectSpec.md v1.2, Sections 5, 6, 7, 8, 9
 """
 
+from typing import List, Dict, Optional, Any
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from enum import Enum
+from pydantic import BaseModel, Field
+import uuid
+
+from config.pipeline_config import (
+    IntentCategory,
+    PatientStage,
+    CertaintyLevel,
+    SPEC_VERSION
+)
 
 
 # ================================
-# Enums
+# Agent Output Status
 # ================================
 
-class MessageRole(str, Enum):
-    """Message role in conversation"""
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-
-
-class QueryCategory(str, Enum):
-    """Categories of breast cancer related queries"""
-    SYMPTOMS = "symptoms"
-    TREATMENT = "treatment"
-    MEDICATION = "medication"
-    SIDE_EFFECTS = "side_effects"
-    LIFESTYLE = "lifestyle"
-    EMOTIONAL_SUPPORT = "emotional_support"
-    NUTRITION = "nutrition"
-    FOLLOW_UP_CARE = "follow_up_care"
-    GENERAL = "general"
-
-
-class ContentType(str, Enum):
-    """Types of knowledge base content"""
-    MEDICAL_ARTICLE = "medical_article"
-    FAQ = "faq"
-    PATIENT_GUIDE = "patient_guide"
-    RESEARCH_SUMMARY = "research_summary"
-    SUPPORT_RESOURCE = "support_resource"
+class AgentStatus(str, Enum):
+    """Status of an agent's execution."""
+    SUCCESS = "success"
+    FAILED = "failed"
+    TIMEOUT = "timeout"
+    SKIPPED = "skipped"
 
 
 # ================================
-# Chat Models
+# Citation Model (Section 9.4)
 # ================================
 
-class ChatMessage(BaseModel):
-    """Single chat message"""
-    role: MessageRole
-    content: str
-    timestamp: Optional[datetime] = None
+class Citation(BaseModel):
+    """Reference to source material used in generating a response."""
+    source_file: str = Field(..., description="Name of source document")
+    section: Optional[str] = Field(None, description="Section or chapter")
+    page_start: Optional[int] = Field(None, description="Starting page number")
+    page_end: Optional[int] = Field(None, description="Ending page number")
+    relevance_score: float = Field(default=0.0, description="How relevant this source was")
 
 
-class ChatRequest(BaseModel):
-    """Request to chat with the AI agent"""
-    message: str = Field(..., min_length=1, max_length=2000, description="User's question or message")
-    session_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
-    user_id: Optional[str] = Field(None, description="User identifier for personalization")
-    include_sources: bool = Field(True, description="Include source citations in response")
-    index_name: Optional[str] = Field(
-        None,
-        description="OpenSearch index to search. Get available indexes from GET /api/v1/knowledge/indexes"
-    )
-    strict_mode: bool = Field(
-        True,
-        description="If True, only answers from knowledge base (refuses if no evidence). If False, uses general AI with knowledge base context."
-    )
+# ================================
+# Intent Agent Output (Section 6)
+# ================================
+
+class IntentResult(BaseModel):
+    """Output from the Intent Extraction Agent."""
+    intent: IntentCategory = Field(..., description="Classified intent category")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Classification confidence")
+    reasoning: Optional[str] = Field(None, description="Why this intent was chosen")
+    clarification_needed: bool = Field(default=False, description="Whether to ask for clarification")
+    suggested_clarification: Optional[str] = Field(None, description="Question to ask if clarification needed")
     
     class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "What are the common side effects of chemotherapy?",
-                "session_id": "abc123",
-                "include_sources": True,
-                "index_name": "breast_cancer_knowledge",
-                "strict_mode": True
-            }
+        use_enum_values = True
+
+
+# ================================
+# Stage Agent Output (Section 7)
+# ================================
+
+class StageResult(BaseModel):
+    """Output from the Stage Identification Agent."""
+    stage: PatientStage = Field(..., description="Inferred patient stage")
+    certainty: CertaintyLevel = Field(..., description="Certainty level (high/medium/low)")
+    certainty_score: float = Field(..., ge=0.0, le=1.0, description="Numeric certainty score")
+    signals: List[str] = Field(default_factory=list, description="Signals that led to this inference")
+    
+    class Config:
+        use_enum_values = True
+
+
+# ================================
+# Retrieval Result
+# ================================
+
+class RetrievalChunk(BaseModel):
+    """A single chunk retrieved from the knowledge base."""
+    chunk_id: str = Field(..., description="Unique identifier for the chunk")
+    content: str = Field(..., description="Text content of the chunk")
+    score: float = Field(..., description="Relevance score")
+    source_file: Optional[str] = Field(None, description="Source document")
+    section: Optional[str] = Field(None, description="Section within document")
+    page_start: Optional[int] = Field(None)
+    page_end: Optional[int] = Field(None)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RetrievalResult(BaseModel):
+    """Output from knowledge base retrieval."""
+    chunks: List[RetrievalChunk] = Field(default_factory=list)
+    total_retrieved: int = Field(default=0)
+    above_threshold: int = Field(default=0)
+    sufficient_evidence: bool = Field(default=False)
+    knowledge_base_used: str = Field(default="")
+
+
+# ================================
+# Reasoning Agent Output (Section 8)
+# ================================
+
+class ReasoningResult(BaseModel):
+    """Output from a Reasoning Agent."""
+    response_text: str = Field(..., description="Generated response content")
+    citations: List[Citation] = Field(default_factory=list, description="Sources used")
+    abstained: bool = Field(default=False, description="Whether agent abstained from answering")
+    abstention_reason: Optional[str] = Field(None, description="Reason for abstention if applicable")
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Response confidence")
+    agent_type: str = Field(default="", description="Which reasoning agent generated this")
+
+
+# ================================
+# Validation Result (Section 9)
+# ================================
+
+class ValidationFlag(BaseModel):
+    """A specific validation issue found."""
+    rule_id: str = Field(..., description="Identifier for the validation rule")
+    severity: str = Field(..., description="high/medium/low")
+    message: str = Field(..., description="Description of the issue")
+    suggested_fix: Optional[str] = Field(None)
+
+
+class ValidationResult(BaseModel):
+    """Output from the Validator Agent."""
+    is_safe: bool = Field(..., description="Whether response passed all safety checks")
+    flags: List[ValidationFlag] = Field(default_factory=list)
+    modified_response: Optional[str] = Field(None, description="Corrected response if modifications needed")
+    disclaimer_added: bool = Field(default=False)
+
+
+# ================================
+# Pipeline Context (Section 5)
+# ================================
+
+class PipelineContext(BaseModel):
+    """
+    Shared context passed through the pipeline.
+    This is the 'blackboard' that all agents can read from and write to.
+    """
+    # Request identification
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    spec_version: str = Field(default=SPEC_VERSION)
+    
+    # User input
+    user_message: str = Field(..., description="Original user message")
+    conversation_history: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Previous messages in the conversation"
+    )
+    session_id: Optional[str] = Field(None, description="Session identifier for tracking")
+    
+    # Agent outputs (populated as pipeline progresses)
+    intent_result: Optional[IntentResult] = Field(None)
+    stage_result: Optional[StageResult] = Field(None)
+    retrieval_result: Optional[RetrievalResult] = Field(None)
+    reasoning_result: Optional[ReasoningResult] = Field(None)
+    validation_result: Optional[ValidationResult] = Field(None)
+    
+    # Pipeline control
+    should_abort: bool = Field(default=False, description="Whether to abort pipeline early")
+    abort_reason: Optional[str] = Field(None)
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
         }
 
 
-class SourceCitation(BaseModel):
-    """Citation for a knowledge base source with full text for popup display"""
-    title: str  # Readable title (e.g., "Chemotherapy for Breast Cancer")
-    content_type: ContentType
-    relevance_score: float
-    source_url: Optional[str] = None  # Original filename
-    excerpt: Optional[str] = None  # Short excerpt (for inline display)
-    
-    # Enhanced fields for UI popup
-    source_text: Optional[str] = None  # Full chunk text (for popup/modal display)
-    document_name: Optional[str] = None  # Clean document name
-    page_start: Optional[int] = None  # Starting page number
-    page_end: Optional[int] = None  # Ending page number
-    section: Optional[str] = None  # Section heading if available
-    
-    # Display-ready summary for frontend
-    display_summary: Optional[str] = None  # e.g., "Information about exercises and recovery"
+# ================================
+# Agent Trace (Section 20)
+# ================================
+
+class AgentTrace(BaseModel):
+    """Trace record for a single agent execution."""
+    agent_name: str
+    status: AgentStatus
+    latency_ms: int
+    input_summary: Optional[str] = None
+    output_summary: Optional[str] = None
+    error_message: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
-class ChatResponse(BaseModel):
-    """Response from the AI agent"""
-    answer: str  # Main answer content (without disclaimer or sources)
-    session_id: str
-    query_category: QueryCategory
-    sources: List[SourceCitation] = []
-    confidence_score: float = Field(ge=0, le=1)
-    response_time_ms: float
+# ================================
+# Pipeline Response
+# ================================
+
+class PipelineResponse(BaseModel):
+    """Final response from the multi-agent pipeline."""
+    request_id: str
+    response: str = Field(..., description="Final response to user")
+    intent: IntentCategory
+    stage: PatientStage
+    citations: List[Citation] = Field(default_factory=list)
+    confidence: float = Field(default=0.8)
+    abstained: bool = Field(default=False)
+    disclaimer_included: bool = Field(default=False)
     
-    # Disclaimer as separate field for frontend styling (bold, different font)
-    disclaimer: str = Field(
-        default="This information is for educational purposes only and should not replace professional medical advice. Please consult your healthcare provider for personalized guidance."
-    )
-    
-    # Sources section heading for frontend styling (different font/style)
-    sources_heading: str = Field(default="Sources consulted")
-    
-    # Indicates if answer was generated from knowledge base or is a refusal
-    has_sufficient_evidence: bool = Field(default=True)
-    
-    # Helpline info for easy frontend rendering
-    support_helpline: str = Field(default="0808 800")
-    support_helpline_name: str = Field(default="HealthCare AI Now")
-    
-    # Conversation tracking for feedback
-    conversation_id: Optional[str] = Field(None, description="Unique ID for this conversation (for feedback)")
-    conversation_created_at: Optional[str] = Field(None, description="ISO timestamp for feedback API")
-    timestamp: Optional[str] = Field(None, description="Response timestamp in ISO format")
+    # Debug/trace info (optional, for logging)
+    trace: List[AgentTrace] = Field(default_factory=list)
+    total_latency_ms: int = Field(default=0)
     
     class Config:
-        json_schema_extra = {
-            "example": {
-                "answer": "Common side effects of chemotherapy include fatigue, nausea, hair loss...",
-                "session_id": "abc123",
-                "query_category": "side_effects",
-                "sources": [
-                    {
-                        "title": "Chemotherapy for Breast Cancer (pages 15-17)",
-                        "content_type": "medical_article",
-                        "relevance_score": 8.5,
-                        "source_url": "bcc17-chemotherapy-for-breast-cancer-web.pdf",
-                        "source_text": "Full text of the source chunk for popup display...",
-                        "document_name": "Chemotherapy for Breast Cancer",
-                        "page_start": 15,
-                        "page_end": 17
-                    }
-                ],
-                "confidence_score": 0.85,
-                "response_time_ms": 1250.5,
-                "disclaimer": "This information is for educational purposes only...",
-                "has_sufficient_evidence": True,
-                "support_helpline": "0808 800 6000",
-                "support_helpline_name": "Breast Cancer Now"
-            }
-        }
+        use_enum_values = True
 
 
 # ================================
-# Knowledge Base Models
+# API Request/Response Models
 # ================================
 
-class KnowledgeDocument(BaseModel):
-    """Document in the knowledge base"""
-    id: Optional[str] = None
-    title: str
-    content: str
-    content_type: ContentType
-    category: QueryCategory
-    source_url: Optional[str] = None
-    author: Optional[str] = None
-    published_date: Optional[datetime] = None
-    tags: List[str] = []
-    metadata: Dict[str, Any] = {}
-
-
-class KnowledgeSearchRequest(BaseModel):
-    """Request to search the knowledge base"""
-    query: str = Field(..., min_length=1, max_length=500)
-    category: Optional[QueryCategory] = None
-    content_type: Optional[ContentType] = None
-    limit: int = Field(10, ge=1, le=50)
-
-
-class KnowledgeSearchResult(BaseModel):
-    """Single search result from knowledge base"""
-    document_id: str
-    title: str
-    content_excerpt: str
-    relevance_score: float
-    content_type: ContentType
-    category: QueryCategory
-    source_url: Optional[str] = None
-
-
-class KnowledgeSearchResponse(BaseModel):
-    """Response from knowledge base search"""
-    results: List[KnowledgeSearchResult]
-    total_results: int
-    search_time_ms: float
-
-
-# ================================
-# Document Upload Models
-# ================================
-
-class DocumentUploadResponse(BaseModel):
-    """Response after uploading a document"""
-    document_id: str
-    title: str
-    status: str
-    chunks_created: int
-    message: str
-
-
-# ================================
-# Health Check Models
-# ================================
-
-class ServiceHealth(BaseModel):
-    """Health status of a service"""
-    name: str
-    status: str  # "healthy", "unhealthy", "degraded"
-    latency_ms: Optional[float] = None
-    message: Optional[str] = None
+class PipelineRequest(BaseModel):
+    """API request to the multi-agent pipeline."""
+    message: str = Field(..., min_length=1, max_length=5000)
+    session_id: Optional[str] = Field(None)
+    conversation_history: List[Dict[str, str]] = Field(default_factory=list)
+    include_trace: bool = Field(default=False, description="Include debug trace in response")
 
 
 class HealthCheckResponse(BaseModel):
-    """Overall health check response"""
+    """Health check response for the pipeline."""
     status: str
-    version: str
-    services: List[ServiceHealth]
-    timestamp: datetime
+    spec_version: str
+    agents_available: List[str]
+    knowledge_bases_available: List[str]
 
 
 # ================================
-# User Session Models
+# Factory Functions
 # ================================
 
-class UserSession(BaseModel):
-    """User session information"""
-    session_id: str
-    user_id: Optional[str] = None
-    created_at: datetime
-    last_active: datetime
-    message_count: int
-    conversation_history: List[ChatMessage] = []
+def create_pipeline_context(
+    message: str,
+    session_id: Optional[str] = None,
+    conversation_history: Optional[List[Dict[str, str]]] = None
+) -> PipelineContext:
+    """Create a new pipeline context for a user message."""
+    return PipelineContext(
+        user_message=message,
+        session_id=session_id,
+        conversation_history=conversation_history or []
+    )
 
 
-class SessionSummary(BaseModel):
-    """Summary of a user session"""
-    session_id: str
-    message_count: int
-    topics_discussed: List[str]
-    created_at: datetime
-    last_active: datetime
-
-
-# ================================
-# Feedback Schemas
-# ================================
-
-class FeedbackRequest(BaseModel):
-    """Request to submit feedback for a conversation"""
-    conversation_id: str = Field(..., description="The conversation ID to provide feedback for")
-    created_at: str = Field(..., description="The created_at timestamp in ISO format (e.g., 2025-01-01T00:00:00Z)")
-    rating: str = Field(..., description="Feedback rating: 'thumbs_up' or 'thumbs_down'")
-    feedback_text: Optional[str] = Field(None, max_length=2000, description="Optional detailed feedback")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "conversation_id": "session123_abc12345",
-                "created_at": "2025-01-01T12:00:00Z",
-                "rating": "thumbs_up",
-                "feedback_text": "Very helpful response!"
-            }
-        }
-
-
-class FeedbackResponse(BaseModel):
-    """Response after submitting feedback"""
-    success: bool
-    message: str
-    conversation_id: str
+def create_citation_from_chunk(chunk: RetrievalChunk) -> Citation:
+    """Convert a retrieval chunk to a citation."""
+    return Citation(
+        source_file=chunk.source_file or "Unknown",
+        section=chunk.section,
+        page_start=chunk.page_start,
+        page_end=chunk.page_end,
+        relevance_score=chunk.score
+    )
 
