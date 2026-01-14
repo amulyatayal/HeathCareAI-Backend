@@ -1,45 +1,43 @@
 # 🏥 Healthcare Companion AI Backend
 
-An AI-powered healthcare companion application designed to provide supportive, accurate information for breast cancer patients. Built with FastAPI and powered by AWS services.
+Multi-agent FastAPI backend for patient education (breast cancer focus), with evidence-grounded responses, intent/stage classification, and safety validation. Built on AWS (Bedrock, OpenSearch, S3).
 
 ## 🌟 Features
 
-- **💬 Intelligent Chat**: Empathetic AI assistant specialized in breast cancer support
-- **📚 Knowledge Base**: Medical information search with semantic understanding
-- **🔒 Safe & Reliable**: Evidence-based responses with appropriate disclaimers
-- **📱 Multi-Platform**: Supports iOS, Android, and Web clients
-- **☁️ AWS-Powered**: Leverages Bedrock, OpenSearch, and S3
+- **💬 Multi-Agent Chat (v2)**: Intent + stage → retrieval → specialized reasoning → safety validator
+- **📚 Evidence-Based**: Hybrid search over OpenSearch (medical + nutrition KBs), citations in responses
+- **🔒 Guardrails**: Validator agent (rule-based + optional LLM) enforces non-clinical, educational output
+- **📉 Structured Logs & Metrics**: Optional structured logging and metric emission toggles
+- **📱 Multi-Platform**: iOS / Android / Web ready
+- **☁️ AWS-Powered**: Bedrock (Claude), OpenSearch, S3
 
-## 🏗️ Architecture
+## 🏗️ Architecture (v2 pipeline)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Client Applications                       │
-│         iOS (Swift)  │  Android (Kotlin)  │  Web (React)    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    FastAPI Backend                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │  Chat API   │  │ Knowledge   │  │   Health    │         │
-│  │  Endpoint   │  │   Search    │  │   Checks    │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   AWS Bedrock   │  │ AWS OpenSearch  │  │     AWS S3      │
-│   (Claude AI)   │  │  (Vector DB)    │  │   (Documents)   │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
+Client (Web/iOS/Android)
+   │
+   ▼
+FastAPI (v2)
+   │
+   ▼
+┌─────────────────────────────────────────────┐
+│ Orchestrator                                │
+│  ├─ Intent Agent (parallel)                 │
+│  ├─ Stage Agent (parallel)                  │
+│  ├─ Retrieval Agent (KB routing)            │
+│  ├─ Reasoning Agent (18 specialized)        │
+│  └─ Validator Agent (guardrails + LLM opt)  │
+└─────────────────────────────────────────────┘
+   │
+   ▼
+AWS Bedrock (Claude) • OpenSearch (hybrid) • S3
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.9/3.10+
 - AWS Account with access to:
   - Bedrock (Claude models)
   - OpenSearch Serverless
@@ -83,24 +81,32 @@ Once running, visit:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-## 📁 Project Structure
+## 📁 Project Structure (key files)
 
 ```
 HeathCareAI-Backend/
 ├── api/                    # API routes and endpoints
-│   ├── __init__.py
-│   └── routes.py
+│   ├── __init__.py         # exports v1 (deprecated) + v2 (active)
+│   ├── routes.py           # v2 multi-agent API
+│   └── routes_deprecated.py# v1 single-agent API
 ├── config/                 # Configuration and AWS clients
 │   ├── __init__.py
 │   ├── settings.py
 │   └── aws.py
 ├── models/                 # Pydantic schemas
-│   ├── __init__.py
-│   └── schemas.py
+│   ├── schemas.py          # v2 pipeline schemas
+│   └── schemas_deprecated.py# v1 schemas
 ├── services/               # Business logic
-│   ├── __init__.py
-│   ├── ai_agent.py        # AI chat agent
-│   └── knowledge_base.py  # Knowledge base operations
+│   ├── ai_agent.py         # v1 single-agent
+│   ├── knowledge_base.py   # KB operations
+│   └── agents/             # v2 multi-agent pipeline
+│       ├── orchestrator.py
+│       ├── intent_agent.py
+│       ├── stage_agent.py
+│       ├── retrieval_agent.py
+│       ├── reasoning_agent.py
+│       └── validator_agent.py
+├── services/metrics.py     # structured metrics (log-based)
 ├── knowledge_base/         # KB management utilities
 ├── utils/                  # Helper functions
 ├── data/                   # Sample data and documents
@@ -113,31 +119,42 @@ HeathCareAI-Backend/
 
 ## 🔌 API Endpoints
 
-### Chat
+### v2 (active, multi-agent pipeline)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/chat/` | Send a message to the AI companion |
-| DELETE | `/api/v1/chat/session/{session_id}` | Clear chat session |
+| POST | `/api/v2/chat/` | Multi-agent chat (intent+stage → retrieval → reasoning → validator) |
+| GET  | `/api/v2/health/` | Pipeline health |
+| GET  | `/api/v2/health/ping` | Ping |
+| GET  | `/api/v2/debug/routing/{intent}` | Inspect routing (KB/model/strict_rag) |
+| POST | `/api/v2/debug/analyze` | Intent+stage only (no full answer) |
 
-### Knowledge Base
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/knowledge/search` | Search the knowledge base |
-| POST | `/api/v1/knowledge/document` | Add a document |
-| DELETE | `/api/v1/knowledge/document/{id}` | Delete a document |
-| GET | `/api/v1/knowledge/stats` | Get KB statistics |
-
-### Health
+### v1 (deprecated, single-agent)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/health/` | Full health check |
-| GET | `/api/v1/health/ping` | Simple ping |
+| POST | `/api/v1/chat/` | Legacy chat |
+| DELETE | `/api/v1/chat/session/{session_id}` | Clear session |
+| POST | `/api/v1/knowledge/search` | Search KB |
+| POST | `/api/v1/knowledge/document` | Add document |
+| DELETE | `/api/v1/knowledge/document/{id}` | Delete document |
+| GET | `/api/v1/knowledge/stats` | KB stats |
+| GET | `/api/v1/health/` | Health |
+| GET | `/api/v1/health/ping` | Ping |
 
-## 💬 Example Chat Request
+## 💬 Example Chat Requests
 
+### v2 (recommended)
+```bash
+curl -X POST "http://localhost:8000/api/v2/chat/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are common side effects of chemotherapy?",
+    "include_trace": false
+  }'
+```
+
+### v1 (deprecated)
 ```bash
 curl -X POST "http://localhost:8000/api/v1/chat/" \
   -H "Content-Type: application/json" \
@@ -147,34 +164,15 @@ curl -X POST "http://localhost:8000/api/v1/chat/" \
   }'
 ```
 
-**Response:**
-```json
-{
-  "answer": "I understand you're asking about chemotherapy side effects...",
-  "session_id": "abc123",
-  "query_category": "side_effects",
-  "sources": [...],
-  "confidence_score": 0.85,
-  "response_time_ms": 1250.5,
-  "disclaimer": "This information is for educational purposes only..."
-}
-```
+## 🏥 Intent & Stage (v2)
 
-## 🏥 Query Categories
+- **Intents (18)**: symptoms, surgery_procedures, drains_wound_care, cancer_treatment, medication_info, side_effects, pre_surgery_prehab, post_surgery_recovery, follow_up_care, nutrition, exercise, clothing, emotional_support, diagnosis_testing, admin_logistics, safety_red_flags, statistics, unknown
+- **Patient stages**: pre_diagnosis, awaiting_results, newly_diagnosed, active_treatment, post_treatment, surveillance, palliative_support, unknown
 
-The AI agent categorizes queries to provide relevant context:
-
-| Category | Description |
-|----------|-------------|
-| `symptoms` | Physical symptoms and concerns |
-| `treatment` | Treatment options and procedures |
-| `medication` | Medications and prescriptions |
-| `side_effects` | Managing treatment side effects |
-| `lifestyle` | Daily life and activities |
-| `emotional_support` | Mental health and coping |
-| `nutrition` | Diet and nutrition |
-| `follow_up_care` | Post-treatment monitoring |
-| `general` | General inquiries |
+Routing:
+- Most intents → KB `breast_cancer_knowledge`
+- nutrition → primary `nutrition_assistant`, fallback `breast_cancer_knowledge` (strict_rag=False)
+- emotional_support → primary `forum_posts`, fallback `breast_cancer_knowledge` (strict_rag=False)
 
 ## ☁️ AWS Setup
 
@@ -215,16 +213,19 @@ pytest tests/ -v
 pytest tests/ --cov=. --cov-report=html
 ```
 
-## 📝 Environment Variables
+## 📝 Environment Variables (key)
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `AWS_REGION` | AWS region | `us-east-1` |
 | `OPENSEARCH_ENDPOINT` | OpenSearch URL | - |
-| `BEDROCK_MODEL_ID` | Chat model ID | Claude Haiku |
+| `BEDROCK_MODEL_ID` | Chat model ID | `anthropic.claude-3-haiku-20240307-v1:0` |
 | `S3_BUCKET_NAME` | Document bucket | - |
 | `API_PORT` | Server port | `8000` |
 | `DEBUG` | Debug mode | `true` |
+| `ENABLE_STRUCTURED_LOGGING` | Emit JSON logs | `true` |
+| `ENABLE_METRICS` | Emit metrics as logs | `false` |
+| `METRICS_NAMESPACE` | Metrics namespace | `healthcare_ai_backend` |
 
 ## 🤝 Contributing
 
