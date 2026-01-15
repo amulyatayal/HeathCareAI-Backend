@@ -71,18 +71,18 @@ async def chat_v2(
     Chat with the AI companion using the multi-agent pipeline (v2).
     
     This endpoint uses a sophisticated multi-agent system that:
-    1. **Intent Extraction**: Classifies query into 18 medical categories
-    2. **Stage Identification**: Infers patient's medical journey stage
+    1. **Profile Loading**: Loads patient stage from profile (if authenticated)
+    2. **Intent Extraction**: Classifies query into 18 medical categories
     3. **Knowledge Retrieval**: Fetches relevant evidence from appropriate KB
     4. **Specialized Reasoning**: Generates stage-aware, empathetic responses
     5. **Safety Validation**: Ensures responses are safe and compliant
     
     Features over v1:
+    - Personalized responses based on user-provided stage
     - More accurate intent classification (18 categories vs 9)
-    - Stage-aware responses tailored to patient journey
     - Better evidence retrieval with intent-based KB routing
     - Built-in safety guardrails
-    - Detailed execution traces for debugging
+    - Sign-in prompts for guest users on stage-sensitive queries
     
     Headers:
     - Authorization: Bearer <token> for authenticated users
@@ -94,16 +94,18 @@ async def chat_v2(
     start_time = time.time()
     
     try:
-        # Extract user_id from headers
-        user_id = _extract_user_id(raw_request, authorization, x_user_id, request)
+        # Extract user identity from headers
+        user_id, is_guest = _extract_user_identity(authorization, x_user_id)
         
         # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Process through pipeline (orchestrator creates its own context)
+        # Process through pipeline with user identity for profile loading
         response = await orchestrator.process(
             message=request.message,
             session_id=request.session_id,
+            user_id=user_id,
+            is_guest=is_guest,
             conversation_history=request.conversation_history,
             include_trace=include_trace or request.include_trace
         )
@@ -116,7 +118,7 @@ async def chat_v2(
         await _log_conversation(
             request=request,
             response=response,
-            user_id=user_id,
+            user_id=user_id or "anonymous",
             latency_ms=total_latency
         )
         
@@ -127,7 +129,8 @@ async def chat_v2(
         logger.info(
             f"Pipeline completed: intent={response.intent}, "
             f"stage={response.stage}, latency={total_latency}ms, "
-            f"abstained={response.abstained}"
+            f"abstained={response.abstained}, is_guest={is_guest}, "
+            f"needs_onboarding={response.needs_onboarding}"
         )
         
         return response
@@ -448,13 +451,46 @@ async def get_intent_routing(intent: str):
 # Helper Functions
 # ================================
 
+from typing import Tuple
+
+def _extract_user_identity(
+    authorization: Optional[str],
+    x_user_id: Optional[str]
+) -> Tuple[Optional[str], bool]:
+    """
+    Extract user identity from request headers.
+    
+    Returns:
+        (user_id, is_guest) tuple:
+        - For authenticated users: (firebase_uid, False)
+        - For guest users: (None, True)
+    """
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            import jwt
+            token = authorization.replace("Bearer ", "")
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+            if user_id:
+                logger.debug(f"Authenticated user from JWT: {user_id}")
+                return (user_id, False)
+        except Exception as jwt_error:
+            logger.warning(f"Could not decode JWT: {jwt_error}")
+    
+    # Guest user (X-User-ID is for session tracking, not profile)
+    if x_user_id:
+        logger.debug(f"Guest user with session ID: {x_user_id}")
+    
+    return (None, True)
+
+
 def _extract_user_id(
     raw_request: FastAPIRequest,
     authorization: Optional[str],
     x_user_id: Optional[str],
     request: PipelineRequest
 ) -> str:
-    """Extract user ID from request headers."""
+    """Extract user ID from request headers (legacy - for logging)."""
     if authorization and authorization.startswith("Bearer "):
         try:
             import jwt
@@ -471,6 +507,7 @@ def _extract_user_id(
         return x_user_id
     else:
         return "anonymous"
+
 
 
 async def _log_conversation(

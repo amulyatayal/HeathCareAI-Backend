@@ -207,8 +207,19 @@ class PipelineResponse(BaseModel):
     trace: List[AgentTrace] = Field(default_factory=list)
     total_latency_ms: int = Field(default=0)
     
+    # Profile/Onboarding prompts
+    needs_onboarding: bool = Field(
+        default=False,
+        description="True if authenticated user needs to complete onboarding"
+    )
+    sign_in_suggestion: Optional[str] = Field(
+        None,
+        description="Markdown text suggesting guest user sign in (shown in response)"
+    )
+    
     class Config:
         use_enum_values = True
+
 
 
 # ================================

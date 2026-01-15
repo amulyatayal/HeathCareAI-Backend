@@ -17,18 +17,39 @@ from services.agents.stage_agent import StageAgent
 from services.agents.retrieval_agent import RetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
+from services.patient_profile_service import get_patient_profile_service
 from models.schemas import (
     PipelineContext,
     PipelineResponse,
     AgentTrace,
     AgentStatus,
+    StageResult,
     create_pipeline_context
 )
-from config.pipeline_config import IntentCategory, SPEC_VERSION
+from config.pipeline_config import IntentCategory, PatientStage, CertaintyLevel, SPEC_VERSION
 from config.settings import settings
 from services.metrics import record_latency, record_count
 
 logger = logging.getLogger(__name__)
+
+
+# Stage-sensitive intents that benefit from personalization
+STAGE_SENSITIVE_INTENTS = [
+    IntentCategory.SURGERY_PROCEDURES,
+    IntentCategory.SIDE_EFFECTS,
+    IntentCategory.MEDICATION_INFO,
+    IntentCategory.POST_SURGERY_RECOVERY,
+    IntentCategory.CANCER_TREATMENT,
+    IntentCategory.EMOTIONAL_SUPPORT,
+    IntentCategory.STATISTICS,
+]
+
+# Sign-in suggestion message (Option C - in-response)
+SIGN_IN_SUGGESTION = (
+    "\n\n---\n"
+    "*💡 For more personalized guidance based on your treatment stage, "
+    "[sign in to your account](/login).*"
+)
 
 
 class PipelineOrchestrator:
@@ -86,6 +107,8 @@ class PipelineOrchestrator:
         self,
         message: str,
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_guest: bool = True,
         conversation_history: Optional[List[dict]] = None,
         include_trace: bool = False
     ) -> PipelineResponse:
@@ -95,6 +118,8 @@ class PipelineOrchestrator:
         Args:
             message: User's question/message
             session_id: Optional session ID for tracking
+            user_id: Firebase UID if authenticated (None for guests)
+            is_guest: Whether user is a guest (no profile features)
             conversation_history: Previous conversation messages
             include_trace: Whether to include debug trace in response
             
@@ -125,9 +150,50 @@ class PipelineOrchestrator:
         
         try:
             # ============================================
-            # PHASE 1: Classification (PARALLEL)
+            # PHASE 0: Load Profile (if authenticated)
             # ============================================
-            ctx = await self._run_classification_phase(ctx)
+            needs_onboarding = False
+            profile = None
+            
+            if user_id and not is_guest:
+                # Authenticated user - load profile for stage
+                profile_service = get_patient_profile_service()
+                profile = await profile_service.get_profile(user_id)
+                
+                if profile and profile.onboarding_completed:
+                    # Use user-provided stage (HIGH certainty)
+                    ctx.stage_result = StageResult(
+                        stage=profile.current_stage,
+                        certainty=CertaintyLevel.HIGH,
+                        certainty_score=1.0,
+                        signals=["User-provided via onboarding"]
+                    )
+                    logger.info(f"Loaded stage from profile: {profile.current_stage}")
+                else:
+                    # Authenticated but no profile - prompt for onboarding
+                    ctx.stage_result = StageResult(
+                        stage=PatientStage.UNKNOWN,
+                        certainty=CertaintyLevel.LOW,
+                        certainty_score=0.0,
+                        signals=["Onboarding not completed"]
+                    )
+                    needs_onboarding = True
+                    logger.info(f"User {user_id} needs onboarding")
+            else:
+                # Guest user - use UNKNOWN stage
+                ctx.stage_result = StageResult(
+                    stage=PatientStage.UNKNOWN,
+                    certainty=CertaintyLevel.LOW,
+                    certainty_score=0.0,
+                    signals=["Guest user"]
+                )
+                logger.debug("Guest user - using UNKNOWN stage")
+            
+            # ============================================
+            # PHASE 1: Intent Classification Only
+            # (Stage now comes from profile, not inference)
+            # ============================================
+            ctx = await self._run_intent_phase(ctx)
             
             # Check for early abort (e.g., clarification needed)
             if ctx.should_abort:
@@ -148,12 +214,48 @@ class PipelineOrchestrator:
             # ============================================
             ctx = await self._run_validation_phase(ctx)
             
-            # Build final response
-            return self._build_response(ctx, start_time, include_trace)
+            # Build final response with profile flags
+            return self._build_response(
+                ctx, start_time, include_trace, 
+                needs_onboarding=needs_onboarding,
+                is_guest=is_guest
+            )
             
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
             return self._create_error_response(ctx, str(e), start_time)
+    
+    async def _run_intent_phase(
+        self,
+        ctx: PipelineContext
+    ) -> PipelineContext:
+        """Run intent classification only (stage comes from profile)."""
+        logger.info("Phase 1: Running intent classification...")
+        
+        ctx, intent_trace = await self.intent_agent.run(ctx)
+        self._traces.append(intent_trace)
+        
+        self._log_step(
+            step_name="intent_classification",
+            agent_name="intent_agent",
+            input_summary="",
+            output_summary=f"intent={ctx.intent_result.intent}, stage={ctx.stage_result.stage}",
+            latency_ms=intent_trace.latency_ms,
+            model_used=None,
+            safety_flags=[],
+        )
+        
+        logger.info(
+            f"Intent classified: {ctx.intent_result.intent}, "
+            f"Stage (from profile): {ctx.stage_result.stage}"
+        )
+        
+        # Check if clarification is needed
+        if ctx.intent_result and ctx.intent_result.clarification_needed:
+            ctx.should_abort = True
+            ctx.abort_reason = "Clarification needed"
+        
+        return ctx
     
     async def _run_classification_phase(
         self,
@@ -287,7 +389,9 @@ class PipelineOrchestrator:
         self,
         ctx: PipelineContext,
         start_time: float,
-        include_trace: bool
+        include_trace: bool,
+        needs_onboarding: bool = False,
+        is_guest: bool = True
     ) -> PipelineResponse:
         """Build the final pipeline response."""
         total_latency = int((time.time() - start_time) * 1000)
@@ -310,7 +414,9 @@ class PipelineOrchestrator:
             abstained=ctx.reasoning_result.abstained if ctx.reasoning_result else True,
             disclaimer_included=True,  # We always add disclaimers for medical content
             trace=self._traces if include_trace else [],
-            total_latency_ms=total_latency
+            total_latency_ms=total_latency,
+            needs_onboarding=needs_onboarding,
+            sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest)
         )
         # Emit metrics
         record_latency(
@@ -391,6 +497,31 @@ class PipelineOrchestrator:
             trace=self._traces,
             total_latency_ms=total_latency
         )
+
+    def _get_sign_in_suggestion(
+        self,
+        ctx: PipelineContext,
+        is_guest: bool
+    ) -> Optional[str]:
+        """
+        Get sign-in suggestion for guest users on stage-sensitive queries.
+        
+        Returns the suggestion message if:
+        - User is a guest
+        - Query intent is stage-sensitive (medical/treatment related)
+        
+        Option C: Response-integrated sign-in suggestion
+        """
+        if not is_guest:
+            return None
+        
+        # Check if intent is stage-sensitive
+        intent = ctx.intent_result.intent if ctx.intent_result else IntentCategory.UNKNOWN
+        
+        if intent in STAGE_SENSITIVE_INTENTS:
+            return SIGN_IN_SUGGESTION
+        
+        return None
 
     def _log_step(
         self,
