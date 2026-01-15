@@ -465,17 +465,26 @@ def _extract_user_identity(
         - For authenticated users: (firebase_uid, False)
         - For guest users: (None, True)
     """
+    logger.info(f"_extract_user_identity called: auth={authorization[:50] if authorization else None}...")
+    
     if authorization and authorization.startswith("Bearer "):
         try:
             import jwt
             token = authorization.replace("Bearer ", "")
+            logger.info(f"Attempting to decode JWT token (len={len(token)})")
             decoded = jwt.decode(token, options={"verify_signature": False})
+            logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
             user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+            logger.info(f"Extracted user_id: {user_id}")
             if user_id:
-                logger.debug(f"Authenticated user from JWT: {user_id}")
+                logger.info(f"Authenticated user from JWT: {user_id}")
                 return (user_id, False)
+            else:
+                logger.warning(f"No user_id found in JWT claims: {decoded}")
         except Exception as jwt_error:
             logger.warning(f"Could not decode JWT: {jwt_error}")
+    else:
+        logger.info(f"No valid Bearer token found (auth={authorization})")
     
     # Guest user (X-User-ID is for session tracking, not profile)
     if x_user_id:
