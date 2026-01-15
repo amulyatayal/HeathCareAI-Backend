@@ -24,7 +24,8 @@ from config.agent_routing import (
     get_route_for_intent,
     get_knowledge_bases_for_intent,
     KnowledgeBase,
-    is_medical_intent
+    is_medical_intent,
+    is_citation_only
 )
 from services.knowledge_base import KnowledgeBaseService
 
@@ -92,13 +93,21 @@ class RetrievalAgent(BaseAgent):
         # Search primary KB first
         primary_kb = knowledge_bases[0] if knowledge_bases else KnowledgeBase.MEDICAL
         
+        # Check if this intent requires citation-only answers
+        citation_only = is_citation_only(intent)
+        answer_type_filter = "citation_only" if citation_only else None
+        
+        if citation_only:
+            logger.info(f"Intent '{intent}' requires citation_only answers")
+        
         try:
             result = await self._search_kb(
                 kb_name=primary_kb.value,
                 query=context.user_message,
                 min_chunks=min_chunks,
                 min_score=min_score,
-                require_keyword=require_keyword
+                require_keyword=require_keyword,
+                answer_type_filter=answer_type_filter
             )
             
             # If insufficient evidence from primary KB, try secondary KBs
@@ -111,7 +120,8 @@ class RetrievalAgent(BaseAgent):
                         query=context.user_message,
                         min_chunks=min_chunks,
                         min_score=min_score,
-                        require_keyword=require_keyword
+                        require_keyword=require_keyword,
+                        answer_type_filter=answer_type_filter
                     )
                     
                     # Merge results
@@ -147,10 +157,12 @@ class RetrievalAgent(BaseAgent):
         query: str,
         min_chunks: int,
         min_score: float,
-        require_keyword: bool
+        require_keyword: bool,
+        answer_type_filter: Optional[str] = None
     ) -> RetrievalResult:
         """Search a specific knowledge base."""
-        logger.info(f"Searching KB '{kb_name}' with min_chunks={min_chunks}, min_score={min_score}")
+        filter_info = f", answer_type={answer_type_filter}" if answer_type_filter else ""
+        logger.info(f"Searching KB '{kb_name}' with min_chunks={min_chunks}, min_score={min_score}{filter_info}")
         
         kb_service = self._get_kb_service(kb_name)
         
@@ -170,6 +182,12 @@ class RetrievalAgent(BaseAgent):
         # Convert to RetrievalResult format
         chunks = []
         for chunk_data in rag_result.get("chunks", []):
+            # Filter by answer_type if specified
+            if answer_type_filter:
+                chunk_answer_type = chunk_data.get("answer_type") or chunk_data.get("metadata", {}).get("answer_type")
+                if chunk_answer_type and chunk_answer_type != answer_type_filter:
+                    continue  # Skip non-matching answer types
+            
             chunk = RetrievalChunk(
                 chunk_id=chunk_data.get("document_id", ""),
                 content=chunk_data.get("content", ""),
@@ -183,7 +201,8 @@ class RetrievalAgent(BaseAgent):
                     "category": chunk_data.get("category"),
                     "content_type": chunk_data.get("content_type"),
                     "tags": chunk_data.get("tags", []),
-                    "keyword_match": chunk_data.get("keyword_match", False)
+                    "keyword_match": chunk_data.get("keyword_match", False),
+                    "answer_type": chunk_data.get("answer_type")
                 }
             )
             chunks.append(chunk)

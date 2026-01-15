@@ -29,6 +29,7 @@ from config.agent_routing import (
     get_agent_prompt,
     is_medical_intent,
     is_strict_rag,
+    is_citation_only,
     ReasoningAgentType
 )
 
@@ -76,6 +77,45 @@ IMPORTANT RULES (FLEXIBLE MODE):
 5. Be empathetic and supportive in tone.
 6. For any medical-adjacent advice, recommend consulting healthcare providers.
 {additional_rules}
+
+{disclaimer_instruction}"""
+
+
+# Template for CITATION-ONLY mode (verbatim quotes only)
+REASONING_CITATION_TEMPLATE = """{agent_prompt}
+
+You are providing information using ONLY verbatim quotes from trusted medical sources.
+
+PATIENT STAGE CONTEXT:
+{stage_guidelines}
+
+Use the patient's stage to personalize your intro and closing (but NOT the medical quotes).
+
+SOURCE MATERIALS (use EXACT text from these):
+{evidence_context}
+
+CRITICAL RULES (CITATION-ONLY MODE):
+1. You MUST use the EXACT wording from the sources. DO NOT paraphrase, summarize, or rewrite ANY medical content.
+2. Select the 2-3 MOST RELEVANT source excerpts that answer the patient's question.
+3. PERSONALIZE the intro based on patient stage:
+   - Pre-diagnosis: "I know waiting for answers can be stressful..."
+   - Newly diagnosed: "Being newly diagnosed can feel overwhelming..."
+   - In treatment: "I understand treatment can bring many questions..."
+   - Post-treatment: "As you're moving forward after treatment..."
+4. PERSONALIZE the closing based on patient stage:
+   - Pre-diagnosis: Reassure that many findings are benign, encourage follow-up
+   - Newly diagnosed: Acknowledge emotions, encourage taking time to understand options
+   - In treatment: Validate challenges, remind them their care team is there
+   - Post-treatment: Celebrate progress, acknowledge ongoing concerns are normal
+5. Your intro and closing should NOT contain any medical information or summary of the quotes.
+6. After each quote, include the source reference: [📄 Source Name, p.XX]
+7. Format quotes clearly using quotation marks.
+
+RESPONSE FORMAT:
+1. Stage-personalized empathetic intro (NO medical content)
+2. Verbatim Quote 1 with source
+3. Verbatim Quote 2 with source (if relevant)
+4. Stage-personalized empathetic closing (NO medical summary) with 💜
 
 {disclaimer_instruction}"""
 
@@ -128,6 +168,7 @@ class ReasoningAgent(BaseAgent):
         # Get intent and check if strict RAG is required
         intent = context.intent_result.intent if context.intent_result else IntentCategory.UNKNOWN
         strict_mode = is_strict_rag(intent)
+        citation_only_mode = is_citation_only(intent)
         
         # Check if we have sufficient evidence
         has_evidence = (
@@ -141,6 +182,10 @@ class ReasoningAgent(BaseAgent):
             context.reasoning_result = self._create_abstention_result(context)
             logger.info(f"Abstaining due to insufficient evidence (strict_rag=True for {intent})")
             return context
+        
+        # CITATION-ONLY MODE: Use LLM for selection/presentation, but enforce verbatim quotes
+        if citation_only_mode:
+            logger.info(f"Citation-only mode for {intent}: LLM will select and present verbatim quotes")
         
         # If not strict mode and no evidence, we'll use LLM general knowledge
         if not has_evidence:
@@ -201,11 +246,12 @@ class ReasoningAgent(BaseAgent):
     
     def _build_system_prompt(self, context: PipelineContext) -> str:
         """Build the system prompt with context."""
-        # Get intent and strict_rag setting
+        # Get intent and mode settings
         intent = IntentCategory.UNKNOWN
         if context.intent_result:
             intent = context.intent_result.intent
         strict_mode = is_strict_rag(intent)
+        citation_only_mode = is_citation_only(intent)
         
         # Get stage guidelines
         stage = PatientStage.UNKNOWN
@@ -238,10 +284,27 @@ class ReasoningAgent(BaseAgent):
                 f'"{MEDICAL_DISCLAIMER}"'
             )
         
-        # Choose template based on strict_rag mode
-        template = REASONING_STRICT_TEMPLATE if strict_mode else REASONING_FLEXIBLE_TEMPLATE
+        # Choose template based on mode
+        if citation_only_mode:
+            template = REASONING_CITATION_TEMPLATE
+            mode_name = "CITATION-ONLY"
+        elif strict_mode:
+            template = REASONING_STRICT_TEMPLATE
+            mode_name = "STRICT"
+        else:
+            template = REASONING_FLEXIBLE_TEMPLATE
+            mode_name = "FLEXIBLE"
         
-        logger.debug(f"Using {'STRICT' if strict_mode else 'FLEXIBLE'} RAG mode for intent: {intent}")
+        logger.debug(f"Using {mode_name} mode for intent: {intent}")
+        
+        # Citation template doesn't use additional_rules
+        if citation_only_mode:
+            return template.format(
+                agent_prompt=self.base_prompt,
+                stage_guidelines=stage_guidelines,
+                evidence_context=evidence_context,
+                disclaimer_instruction=disclaimer_instruction
+            )
         
         return template.format(
             agent_prompt=self.base_prompt,
@@ -367,6 +430,82 @@ class ReasoningAgent(BaseAgent):
             abstained=True,
             abstention_reason="Insufficient evidence in knowledge base",
             confidence=0.0,
+            agent_type=self.agent_type.value
+        )
+    
+    def _build_citation_only_response(self, context: PipelineContext) -> ReasoningResult:
+        """
+        Build a response using ONLY verbatim text from sources.
+        No LLM paraphrasing - returns exact quotes with source links.
+        """
+        chunks = context.retrieval_result.chunks if context.retrieval_result else []
+        
+        if not chunks:
+            return self._create_abstention_result(context)
+        
+        # Build response with verbatim text and source citations
+        response_parts = []
+        citations = []
+        seen_content = set()
+        
+        for i, chunk in enumerate(chunks[:5], 1):  # Limit to top 5 sources
+            # Get the verbatim text (source_excerpt if available, else content)
+            content = chunk.content.strip()
+            
+            # Skip duplicates
+            content_key = content[:100]
+            if content_key in seen_content:
+                continue
+            seen_content.add(content_key)
+            
+            # Extract just the answer part if it's a Q&A format
+            answer_text = content
+            if "Answer:" in content:
+                parts = content.split("Answer:", 1)
+                if len(parts) > 1:
+                    answer_text = parts[1].strip()
+            
+            # Format source info for hyperlink
+            source_file = chunk.source_file or "Source"
+            source_name = source_file.replace(".pdf", "").replace("-", " ").replace("_", " ")
+            if len(source_name) > 40:
+                source_name = source_name[:37] + "..."
+            
+            page_info = ""
+            if chunk.page_start:
+                page_info = f" (p.{chunk.page_start}"
+                if chunk.page_end and chunk.page_end != chunk.page_start:
+                    page_info = f" (pp.{chunk.page_start}-{chunk.page_end}"
+                page_info += ")"
+            
+            # Format: verbatim text with source link icon
+            # Using markdown link format: [📄](source_url)
+            source_link = f"[📄 {source_name}{page_info}]({source_file})"
+            
+            response_parts.append(f"{answer_text}\n\n*Source: {source_link}*")
+            
+            # Add citation
+            citations.append(Citation(
+                source_file=chunk.source_file or "Unknown",
+                section=chunk.section,
+                page_start=chunk.page_start,
+                page_end=chunk.page_end,
+                relevance_score=chunk.score
+            ))
+        
+        # Join all verbatim quotes
+        if len(response_parts) > 1:
+            response_text = "\n\n---\n\n".join(response_parts)
+        else:
+            response_text = response_parts[0] if response_parts else "No information found."
+        
+        logger.info(f"Citation-only response: {len(response_parts)} sources, {len(response_text)} chars")
+        
+        return ReasoningResult(
+            response_text=response_text,
+            citations=citations,
+            abstained=False,
+            confidence=0.95,  # High confidence for verbatim quotes
             agent_type=self.agent_type.value
         )
     

@@ -447,7 +447,9 @@ class KnowledgeBaseService:
                     "section": source.get("section"),
                     "content_type": source.get("content_type", "medical_article"),
                     "relevance_score": score,
-                    "has_keyword_match": has_keyword_match
+                    "has_keyword_match": has_keyword_match,
+                    "answer_type": source.get("answer_type"),  # For per-intent KBs
+                    "source_excerpt": source.get("source_excerpt")  # Verbatim text
                 }
                 chunks.append(chunk)
                 
