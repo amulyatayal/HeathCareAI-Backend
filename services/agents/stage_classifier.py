@@ -30,22 +30,24 @@ class StageClassifierAgent:
         # Cache for stage embeddings: {stage_id: [float, ...]}
         self._stage_embeddings: Dict[str, List[float]] = {}
         self._initialized = False
+        self._embeddings_file = os.path.join(
+            os.path.dirname(__file__), '..', '..', 'data', 'stage_embeddings.json'
+        )
 
     async def initialize(self):
         """
         Hydrate the stage embeddings cache.
-        This should be called at startup or lazily on first request.
+        Loads from file if available, otherwise computes and saves.
         """
         if self._initialized:
             return
 
+        # Try to load from cache file first
+        if self._load_embeddings_from_file():
+            self._initialized = True
+            return
+
         logger.info("Initializing StageClassifierAgent: Computing embeddings for all stages...")
-        
-        # Ensure stages are loaded
-        # Accessing protected member _ensure_loaded is necessary as it's not exposed publicly 
-        # but is idempotent. Ideally PatientStageService should have a public load method.
-        # We'll trigger a read to ensure load.
-        _ = self.stage_service.get_all_stages() 
         
         stages = self.stage_service.get_all_stages()
         
@@ -53,11 +55,16 @@ class StageClassifierAgent:
         for stage in stages:
             stage_id = stage.stage_id
             
-            # Create a rich semantic representation of the stage
-            # "Stage Name: Description. Notes."
+            # Create a rich semantic representation including search_terms
+            # "Stage Name: Description. Keywords: term1, term2"
             stage_text = f"{stage.name}: {stage.description}"
             if stage.transition_notes:
                 stage_text += f" Note: {stage.transition_notes}"
+            
+            # Include search_terms for better patient-language matching
+            search_terms = getattr(stage, 'search_terms', [])
+            if search_terms:
+                stage_text += f" Keywords: {', '.join(search_terms)}"
                 
             embedding = self.embedding_service.create_embedding(stage_text)
             if embedding:
@@ -67,7 +74,30 @@ class StageClassifierAgent:
                 logger.warning(f"Failed to generate embedding for stage {stage_id}")
                 
         self._initialized = True
+        self._save_embeddings_to_file()
         logger.info(f"StageClassifierAgent initialized with {count} stage embeddings.")
+
+    def _load_embeddings_from_file(self) -> bool:
+        """Load embeddings from cache file if it exists."""
+        try:
+            if os.path.exists(self._embeddings_file):
+                with open(self._embeddings_file, 'r') as f:
+                    data = json.load(f)
+                    self._stage_embeddings = data.get('embeddings', {})
+                    logger.info(f"Loaded {len(self._stage_embeddings)} stage embeddings from cache.")
+                    return True
+        except Exception as e:
+            logger.warning(f"Failed to load embeddings from file: {e}")
+        return False
+    
+    def _save_embeddings_to_file(self):
+        """Save embeddings to cache file."""
+        try:
+            with open(self._embeddings_file, 'w') as f:
+                json.dump({'embeddings': self._stage_embeddings}, f)
+            logger.info(f"Saved {len(self._stage_embeddings)} embeddings to {self._embeddings_file}")
+        except Exception as e:
+            logger.warning(f"Failed to save embeddings to file: {e}")
 
     def _cosine_similarity(self, v1: List[float], v2: List[float]) -> float:
         """Calculate cosine similarity between two vectors."""
