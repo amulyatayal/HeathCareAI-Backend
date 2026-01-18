@@ -274,14 +274,31 @@ async def main():
                         help='Maximum questions to generate per chunk (default: 15)')
     parser.add_argument('--sample', '-s', action='store_true',
                         help='Process only 3 sample files for testing')
+    parser.add_argument('--file', '-f', type=str, default=None,
+                        help='Process a specific PDF file (filename only)')
+    parser.add_argument('--output', '-o', type=str, default=None,
+                        help='Output CSV filename (default: ProcessedQ&A_Generated.csv)')
     args = parser.parse_args()
     
     # Configuration
     DATA_DIR = Path(__file__).parent.parent / "data" / "sample" / "raw"
-    OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ProcessedQ&A_Generated.csv"
+    
+    # Output file
+    if args.output:
+        OUTPUT_FILE = Path(__file__).parent.parent / "data" / args.output
+    else:
+        OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ProcessedQ&A_Generated.csv"
     
     # Get PDF files
-    if args.sample:
+    if args.file:
+        # Process a specific file
+        if (DATA_DIR / args.file).exists():
+            TEST_FILES = [args.file]
+        else:
+            logger.error(f"File not found: {args.file}")
+            logger.info(f"Looking in: {DATA_DIR}")
+            return
+    elif args.sample:
         # Sample files for testing
         TEST_FILES = [
             "bcc17-chemotherapy-for-breast-cancer-web.pdf",

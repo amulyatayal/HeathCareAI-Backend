@@ -1,3 +1,6 @@
 """Models module"""
-from .schemas import *
+# Import from deprecated schemas for backward compatibility with old API
+from .schemas_deprecated import *
+
+# New pipeline schemas are available as models.schemas directly
 

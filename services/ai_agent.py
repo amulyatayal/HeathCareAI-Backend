@@ -11,7 +11,7 @@ from datetime import datetime
 import uuid
 
 from config import settings, bedrock
-from models.schemas import (
+from models.schemas_deprecated import (
     ChatMessage, ChatResponse, SourceCitation,
     QueryCategory, ContentType, MessageRole
 )
@@ -693,15 +693,27 @@ async def chat_with_agent(
         # ========================================
         logger.info(f"Using STRICT RAG mode with index: {index_name}")
         
+        # Adjust thresholds based on index type
+        # Nutrition index needs more lenient thresholds for general queries like "give me a recipe"
+        is_nutrition_index = index_name and 'nutrition' in index_name.lower()
+        
+        if is_nutrition_index:
+            min_chunks = 1  # Recipes are self-contained, 1 is enough
+            min_score = 1.0  # Lower threshold for general recipe queries
+            require_keyword = False  # Don't require exact keyword match for recipes
+        else:
+            min_chunks = 2  # Medical content needs more evidence
+            min_score = 2.0  # Higher threshold for medical accuracy
+            require_keyword = True  # Require keyword overlap for medical queries
+        
         try:
             # Search for relevant chunks with evidence gating
-            # Note: min_score=2.0 works for both PDF chunks and Q&A pairs
             rag_result = await kb.search_chunks_for_rag(
                 query=message,
                 limit=15,  # Get 15 chunks
-                min_chunks=2,  # Require at least 2 good chunks
-                min_score=2.0,  # Minimum relevance score (lowered for Q&A compatibility)
-                require_keyword_match=True  # Require keyword overlap
+                min_chunks=min_chunks,
+                min_score=min_score,
+                require_keyword_match=require_keyword
             )
             
             chunks = rag_result["chunks"]

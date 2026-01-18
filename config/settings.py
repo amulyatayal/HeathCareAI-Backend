@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
     log_level: str = "INFO"
+    enable_structured_logging: bool = True
+    enable_metrics: bool = False
+    metrics_namespace: str = "healthcare_ai_backend"
     
     # API Configuration
     api_host: str = "0.0.0.0"

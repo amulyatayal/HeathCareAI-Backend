@@ -20,7 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from api import chat_router, knowledge_router, health_router, categories_router
+# v1 API routes (deprecated - single agent)
+from api import chat_router, knowledge_router, health_router, categories_router, forum_router
+# v2 API routes (new - multi-agent pipeline)
+from api import pipeline_router, health_v2_router, debug_router
 
 # ================================
 # Logging Configuration
@@ -71,22 +74,27 @@ app = FastAPI(
     
     - **💬 Intelligent Chat**: Empathetic AI assistant specialized in breast cancer support
     - **📚 Knowledge Base**: Medical information search with semantic understanding
+    - **🗣️ Community Forum**: Reddit-style discussion forums for peer support
     - **🔒 Safe & Reliable**: Evidence-based responses with appropriate disclaimers
+    
+    ### API Versions
+    
+    **v1 (Deprecated)**: Single-agent chat at `/api/v1/chat`
+    - 9 query categories
+    - Basic RAG with keyword/vector search
+    
+    **v2 (New - Recommended)**: Multi-agent pipeline at `/api/v2/chat`
+    - 18 intent categories with specialized reasoning agents
+    - Stage-aware responses tailored to patient journey
+    - Intent-based knowledge base routing
+    - Built-in safety guardrails and validation
     
     ### Supported Platforms
     - iOS (Swift/SwiftUI)
     - Android (Kotlin)
     - Web (React/Next.js)
-    
-    ### Query Categories
-    - Symptoms & Diagnosis
-    - Treatment Options
-    - Side Effects Management
-    - Lifestyle & Nutrition
-    - Emotional Support
-    - Follow-up Care
     """,
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -154,11 +162,19 @@ async def log_requests(request: Request, call_next):
 # Include Routers
 # ================================
 
-# API v1 routes
-app.include_router(chat_router, prefix=settings.api_prefix)
-app.include_router(knowledge_router, prefix=settings.api_prefix)
-app.include_router(health_router, prefix=settings.api_prefix)
-app.include_router(categories_router, prefix=settings.api_prefix)
+# API v1 routes (deprecated - single agent)
+# Prefix: /api/v1
+app.include_router(chat_router, prefix="/api/v1")
+app.include_router(knowledge_router, prefix="/api/v1")
+app.include_router(health_router, prefix="/api/v1")
+app.include_router(categories_router, prefix="/api/v1")
+app.include_router(forum_router, prefix="/api/v1")
+
+# API v2 routes (new - multi-agent pipeline)
+# Prefix: /api/v2
+app.include_router(pipeline_router, prefix="/api/v2")
+app.include_router(health_v2_router, prefix="/api/v2")
+app.include_router(debug_router, prefix="/api/v2")
 
 
 # ================================
@@ -170,10 +186,24 @@ async def root():
     """Root endpoint with API information"""
     return {
         "name": "Healthcare Companion AI",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "description": "AI-powered support for breast cancer patients",
         "documentation": "/docs",
-        "health": f"{settings.api_prefix}/health",
+        "api_versions": {
+            "v1": {
+                "status": "deprecated",
+                "base_url": "/api/v1",
+                "chat": "/api/v1/chat",
+                "health": "/api/v1/health"
+            },
+            "v2": {
+                "status": "active",
+                "base_url": "/api/v2",
+                "chat": "/api/v2/chat",
+                "health": "/api/v2/health",
+                "debug": "/api/v2/debug"
+            }
+        },
         "timestamp": datetime.utcnow().isoformat()
     }
 

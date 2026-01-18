@@ -119,22 +119,18 @@ _dynamodb_table = None
 
 
 def get_dynamodb_client():
-    """Get DynamoDB client"""
+    """Get DynamoDB client using default credential chain"""
     return boto3.client(
         service_name='dynamodb',
-        region_name=settings.aws_region,
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key
+        region_name=settings.aws_region
     )
 
 
 def get_dynamodb_table(table_name: str = "ChatConversations"):
-    """Get DynamoDB table resource"""
+    """Get DynamoDB table resource using default credential chain"""
     dynamodb = boto3.resource(
         'dynamodb',
-        region_name=settings.aws_region,
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key
+        region_name=settings.aws_region
     )
     return dynamodb.Table(table_name)
 

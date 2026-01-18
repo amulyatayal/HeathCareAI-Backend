@@ -1,459 +1,510 @@
 """
-API Routes for Healthcare Companion Backend
-Provides endpoints for chat, knowledge base, and health checks
+API Routes for Multi-Agent Pipeline (v2)
+New endpoints using the multi-agent orchestrator for improved response quality.
+
+Spec Reference: ProjectSpec.md v1.2, Section 5 (Orchestrator)
 """
 
 import logging
+import time
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Header, Request as FastAPIRequest
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Header, Request as FastAPIRequest, Query
 from fastapi.responses import JSONResponse
 
 from models.schemas import (
-    ChatRequest, ChatResponse,
-    KnowledgeSearchRequest, KnowledgeSearchResponse,
-    KnowledgeDocument, DocumentUploadResponse,
-    HealthCheckResponse, ServiceHealth,
-    QueryCategory, ContentType,
-    FeedbackRequest, FeedbackResponse
+    PipelineRequest,
+    PipelineResponse,
+    PipelineContext,
+    Citation,
+    AgentTrace,
+    HealthCheckResponse,
+    create_pipeline_context
 )
-from services.ai_agent import chat_with_agent, SessionManager
-from services.knowledge_base import get_knowledge_base
+from services.agents.orchestrator import PipelineOrchestrator
 from services.conversation_logger import get_conversation_logger
-from config import settings
+from config.pipeline_config import (
+    IntentCategory,
+    PatientStage,
+    SPEC_VERSION,
+    INTENT_CATEGORIES,
+    PATIENT_STAGES
+)
+from config.agent_routing import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
 
 # ================================
-# Chat Router
+# Initialize Pipeline
 # ================================
 
-chat_router = APIRouter(prefix="/chat", tags=["Chat"])
+# Singleton orchestrator instance
+_orchestrator: Optional[PipelineOrchestrator] = None
 
 
-@chat_router.post("/", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
+def get_orchestrator() -> PipelineOrchestrator:
+    """Get or create the pipeline orchestrator singleton."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = PipelineOrchestrator(enable_llm_validation=True)
+        logger.info("Pipeline orchestrator initialized")
+    return _orchestrator
+
+
+# ================================
+# Chat Router (v2 - Multi-Agent Pipeline)
+# ================================
+
+pipeline_router = APIRouter(prefix="/chat", tags=["Chat v2 (Multi-Agent Pipeline)"])
+
+
+@pipeline_router.post("/", response_model=PipelineResponse)
+async def chat_v2(
+    request: PipelineRequest,
     raw_request: FastAPIRequest,
     authorization: Optional[str] = Header(None),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    include_trace: bool = Query(False, description="Include detailed agent execution trace")
 ):
     """
-    Chat with the breast cancer companion AI agent.
+    Chat with the AI companion using the multi-agent pipeline (v2).
     
-    Send a message and receive an empathetic, informative response
-    backed by medical knowledge base.
+    This endpoint uses a sophisticated multi-agent system that:
+    1. **Intent Extraction**: Classifies query into 18 medical categories
+    2. **Stage Identification**: Infers patient's medical journey stage
+    3. **Knowledge Retrieval**: Fetches relevant evidence from appropriate KB
+    4. **Specialized Reasoning**: Generates stage-aware, empathetic responses
+    5. **Safety Validation**: Ensures responses are safe and compliant
     
-    Authentication (via headers):
-    - Authorization: Bearer <token> for Google OAuth users
+    Features over v1:
+    - More accurate intent classification (18 categories vs 9)
+    - Stage-aware responses tailored to patient journey
+    - Better evidence retrieval with intent-based KB routing
+    - Built-in safety guardrails
+    - Detailed execution traces for debugging
+    
+    Headers:
+    - Authorization: Bearer <token> for authenticated users
     - X-User-ID: guest_xxx for guest users
     
-    Options:
-    - index_name: Get available indexes from GET /api/v1/knowledge/indexes
-    - strict_mode: True = only knowledge base answers, False = general AI with KB context
-    
-    Returns conversation_id for feedback submission.
+    Query Parameters:
+    - include_trace: Set to true to include detailed agent execution trace
     """
+    start_time = time.time()
+    
     try:
         # Extract user_id from headers
-        # Debug: Log ALL received headers
-        all_headers = dict(raw_request.headers)
-        logger.info(f"ALL Headers received: {all_headers}")
-        logger.info(f"Parsed - Authorization: {authorization}, X-User-ID: {x_user_id}")
+        user_id = _extract_user_id(raw_request, authorization, x_user_id, request)
         
-        user_id = None
-        if authorization and authorization.startswith("Bearer "):
-            # Google OAuth - decode JWT to get user info
-            token = authorization.replace("Bearer ", "")
-            try:
-                import jwt
-                # Decode without verification for user extraction (verification done by frontend)
-                decoded = jwt.decode(token, options={"verify_signature": False})
-                user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
-                logger.info(f"Authenticated user from JWT: {user_id}")
-            except Exception as jwt_error:
-                logger.warning(f"Could not decode JWT: {jwt_error}")
-                user_id = "oauth_user"
-        elif x_user_id:
-            # Guest user with X-User-ID header
-            user_id = x_user_id
-            logger.info(f"Guest user from X-User-ID header: {user_id}")
-        else:
-            # Fallback to request body or anonymous
-            user_id = request.user_id or "anonymous"
-            logger.info(f"Fallback user_id: {user_id} (from request body: {request.user_id})")
+        # Get orchestrator
+        orchestrator = get_orchestrator()
         
-        response = await chat_with_agent(
+        # Process through pipeline (orchestrator creates its own context)
+        response = await orchestrator.process(
             message=request.message,
             session_id=request.session_id,
-            user_id=user_id,
-            include_sources=request.include_sources,
-            index_name=request.index_name,
-            use_strict_rag=request.strict_mode
+            conversation_history=request.conversation_history,
+            include_trace=include_trace or request.include_trace
         )
         
-        # Log conversation to DynamoDB (async, non-blocking)
-        try:
-            conversation_logger = get_conversation_logger()
-            log_result = await conversation_logger.log_conversation(
-                session_id=response.session_id,
-                user_id=user_id,
-                question=request.message,
-                answer=response.answer,
-                query_category=response.query_category.value,
-                index_name=request.index_name or "breast_cancer_knowledge",
-                strict_mode=request.strict_mode,
-                has_sufficient_evidence=response.has_sufficient_evidence,
-                confidence_score=response.confidence_score,
-                response_time_ms=response.response_time_ms,
-                sources=[{"title": s.title, "score": s.relevance_score} for s in response.sources]
-            )
-            
-            # Add conversation tracking to response for feedback
-            if log_result:
-                response.conversation_id = log_result["conversation_id"]
-                # Convert milliseconds to ISO timestamp
-                from datetime import datetime
-                created_at_ms = log_result["created_at"]
-                iso_timestamp = datetime.utcfromtimestamp(created_at_ms / 1000).isoformat() + "Z"
-                response.conversation_created_at = iso_timestamp
-                response.timestamp = iso_timestamp
-            
-        except Exception as log_error:
-            logger.warning(f"Failed to log conversation (non-fatal): {log_error}")
+        # Calculate total latency
+        total_latency = int((time.time() - start_time) * 1000)
+        response.total_latency_ms = total_latency
+        
+        # Log conversation (async, non-blocking)
+        await _log_conversation(
+            request=request,
+            response=response,
+            user_id=user_id,
+            latency_ms=total_latency
+        )
+        
+        # Optionally strip trace info if not requested
+        if not include_trace and not request.include_trace:
+            response.trace = []
+        
+        logger.info(
+            f"Pipeline completed: intent={response.intent}, "
+            f"stage={response.stage}, latency={total_latency}ms, "
+            f"abstained={response.abstained}"
+        )
         
         return response
         
     except Exception as e:
-        logger.error(f"Chat error: {e}")
+        logger.error(f"Pipeline error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="An error occurred while processing your request. Please try again."
         )
 
 
-@chat_router.post("/feedback", response_model=FeedbackResponse)
-async def submit_feedback(request: FeedbackRequest):
+@pipeline_router.post("/stream")
+async def chat_v2_stream(
+    request: PipelineRequest,
+    raw_request: FastAPIRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+):
     """
-    Submit feedback for a conversation.
+    Stream chat responses from the multi-agent pipeline (v2).
     
-    Use the conversation_id and conversation_created_at from the chat response.
-    Rating should be 'thumbs_up' or 'thumbs_down'.
+    Note: Streaming is not yet implemented. Use the non-streaming endpoint.
     """
-    try:
-        # Validate rating
-        if request.rating not in ["thumbs_up", "thumbs_down"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Rating must be 'thumbs_up' or 'thumbs_down'"
-            )
-        
-        # Convert ISO timestamp to milliseconds for DynamoDB
-        from datetime import datetime, timezone
-        try:
-            # Parse ISO format and treat as UTC
-            iso_str = request.created_at.replace("Z", "")
-            dt = datetime.fromisoformat(iso_str).replace(tzinfo=timezone.utc)
-            created_at_ms = int(dt.timestamp() * 1000)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid timestamp format. Expected ISO format (e.g., 2025-01-01T12:00:00Z)"
-            )
-        
-        conversation_logger = get_conversation_logger()
-        success = await conversation_logger.update_feedback(
-            conversation_id=request.conversation_id,
-            created_at=created_at_ms,
-            feedback_rating=request.rating,
-            feedback_text=request.feedback_text
-        )
-        
-        if success:
-            return FeedbackResponse(
-                success=True,
-                message="Thank you for your feedback!",
-                conversation_id=request.conversation_id
-            )
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to save feedback"
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Feedback error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error submitting feedback"
-        )
+    raise HTTPException(
+        status_code=501,
+        detail="Streaming not yet implemented. Use POST /api/v2/chat/ instead."
+    )
 
 
-@chat_router.delete("/session/{session_id}")
-async def clear_session(session_id: str):
-    """Clear a chat session and its history"""
-    SessionManager.clear_session(session_id)
-    return {"message": "Session cleared successfully", "session_id": session_id}
+@pipeline_router.get("/intents")
+async def list_intent_categories():
+    """
+    List all 18 intent categories the pipeline can classify.
+    
+    Useful for understanding what types of queries the system handles.
+    """
+    return {
+        "categories": [
+            {
+                "value": cat.value,
+                "label": cat.value.replace("_", " ").title(),
+                "description": INTENT_CATEGORIES.get(cat, {}).get("description", "")
+            }
+            for cat in IntentCategory
+        ],
+        "count": len(IntentCategory),
+        "spec_version": SPEC_VERSION
+    }
+
+
+@pipeline_router.get("/stages")
+async def list_patient_stages():
+    """
+    List all patient stages the pipeline can identify.
+    
+    Useful for understanding how responses are tailored to patient journey.
+    """
+    return {
+        "stages": [
+            {
+                "value": stage.value,
+                "label": stage.value.replace("_", " ").title(),
+                "description": PATIENT_STAGES.get(stage, {}).get("description", "")
+            }
+            for stage in PatientStage
+        ],
+        "count": len(PatientStage),
+        "spec_version": SPEC_VERSION
+    }
 
 
 # ================================
-# Knowledge Base Router
+# Health Router (v2 - Pipeline Health)
 # ================================
 
-knowledge_router = APIRouter(prefix="/knowledge", tags=["Knowledge Base"])
+health_v2_router = APIRouter(prefix="/health", tags=["Health v2"])
 
 
-@knowledge_router.post("/search", response_model=KnowledgeSearchResponse)
-async def search_knowledge_base(request: KnowledgeSearchRequest):
+@health_v2_router.get("/", response_model=HealthCheckResponse)
+async def health_check_v2():
     """
-    Search the medical knowledge base.
+    Check health of the multi-agent pipeline.
     
-    Uses keyword search to find relevant information about breast cancer.
+    Returns status of all agents and knowledge bases.
     """
     try:
-        kb = get_knowledge_base(use_vectors=False)  # Keyword search for SEARCH collections
-        response = await kb.search(
-            query=request.query,
-            category=request.category,
-            content_type=request.content_type,
-            limit=request.limit
-        )
-        return response
+        orchestrator = get_orchestrator()
         
-    except Exception as e:
-        logger.error(f"Knowledge search error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error searching knowledge base"
-        )
-
-
-@knowledge_router.post("/document", response_model=DocumentUploadResponse)
-async def add_document(document: KnowledgeDocument):
-    """
-    Add a document to the knowledge base.
-    
-    Documents are indexed for keyword search.
-    """
-    try:
-        kb = get_knowledge_base(use_vectors=False)
-        doc_id = await kb.add_document(document)
+        # List available agents
+        agents_available = [
+            "IntentAgent",
+            "StageAgent", 
+            "RetrievalAgent",
+            "ReasoningAgent (18 variants)",
+            "ValidatorAgent"
+        ]
         
-        return DocumentUploadResponse(
-            document_id=doc_id,
-            title=document.title,
-            status="indexed",
-            chunks_created=1,  # Will be updated when chunking is implemented
-            message="Document successfully added to knowledge base"
+        # List available knowledge bases
+        kbs_available = [kb.value for kb in KnowledgeBase]
+        
+        return HealthCheckResponse(
+            status="healthy",
+            spec_version=SPEC_VERSION,
+            agents_available=agents_available,
+            knowledge_bases_available=kbs_available
         )
         
     except Exception as e:
-        logger.error(f"Document upload error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error adding document to knowledge base"
+        logger.error(f"Health check error: {e}")
+        return HealthCheckResponse(
+            status="unhealthy",
+            spec_version=SPEC_VERSION,
+            agents_available=[],
+            knowledge_bases_available=[]
         )
 
 
-@knowledge_router.delete("/document/{document_id}")
-async def delete_document(document_id: str):
-    """Delete a document from the knowledge base"""
-    try:
-        kb = get_knowledge_base(use_vectors=False)
-        success = await kb.delete_document(document_id)
-        
-        if success:
-            return {"message": "Document deleted successfully", "document_id": document_id}
-        else:
-            raise HTTPException(status_code=404, detail="Document not found")
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Document deletion error: {e}")
-        raise HTTPException(status_code=500, detail="Error deleting document")
+@health_v2_router.get("/ping")
+async def ping_v2():
+    """Simple ping endpoint for load balancer health checks."""
+    return {
+        "status": "ok",
+        "api_version": "v2",
+        "spec_version": SPEC_VERSION,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
-@knowledge_router.get("/stats")
-async def get_knowledge_stats():
-    """Get knowledge base statistics"""
-    try:
-        kb = get_knowledge_base(use_vectors=False)
-        stats = await kb.get_stats()
-        return stats
-    except Exception as e:
-        logger.error(f"Stats error: {e}")
-        raise HTTPException(status_code=500, detail="Error getting statistics")
-
-
-@knowledge_router.get("/indexes")
-async def list_available_indexes():
+@health_v2_router.get("/detailed")
+async def detailed_health_check():
     """
-    List all available knowledge base indexes from OpenSearch.
-    
-    Returns index names and document counts for UI selection.
+    Detailed health check with individual component status.
     """
-    try:
-        from config.aws import get_opensearch_client
-        client = get_opensearch_client()
-        
-        # Get all indexes (excluding system indexes starting with '.')
-        indices = client.cat.indices(format='json')
-        
-        available_indexes = []
-        for idx in indices:
-            index_name = idx.get('index', '')
-            # Skip system/hidden indexes
-            if index_name.startswith('.'):
-                continue
-            
-            # Get document count
-            doc_count = int(idx.get('docs.count', 0))
-            
-            # Create display name from index name
-            display_name = index_name.replace('_', ' ').replace('-', ' ').title()
-            
-            # Add description based on index name pattern
-            if 'qa' in index_name.lower():
-                description = "Pre-generated Q&A pairs from medical documents"
-            elif 'knowledge' in index_name.lower():
-                description = "Document chunks from medical leaflets"
-            else:
-                description = "Medical knowledge base"
-            
-            available_indexes.append({
-                "index_name": index_name,
-                "display_name": display_name,
-                "description": description,
-                "document_count": doc_count,
-                "status": idx.get('health', 'unknown')
-            })
-        
-        # Sort by document count (descending)
-        available_indexes.sort(key=lambda x: x['document_count'], reverse=True)
-        
-        return {
-            "indexes": available_indexes,
-            "count": len(available_indexes)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error listing indexes: {e}")
-        raise HTTPException(status_code=500, detail="Error listing available indexes")
-
-
-# ================================
-# Health Check Router
-# ================================
-
-health_router = APIRouter(prefix="/health", tags=["Health"])
-
-
-@health_router.get("/", response_model=HealthCheckResponse)
-async def health_check():
-    """
-    Check the health of all services.
-    
-    Returns status of Bedrock, OpenSearch, and other dependencies.
-    """
-    services = []
-    overall_status = "healthy"
+    health_status = {
+        "overall": "healthy",
+        "spec_version": SPEC_VERSION,
+        "timestamp": datetime.utcnow().isoformat(),
+        "components": {}
+    }
     
     # Check Bedrock
     try:
         from config.aws import bedrock
         client = bedrock()
-        services.append(ServiceHealth(
-            name="bedrock",
-            status="healthy",
-            message="Bedrock client initialized"
-        ))
+        health_status["components"]["bedrock"] = {
+            "status": "healthy",
+            "message": "Bedrock client initialized"
+        }
     except Exception as e:
-        services.append(ServiceHealth(
-            name="bedrock",
-            status="unhealthy",
-            message=str(e)
-        ))
-        overall_status = "degraded"
+        health_status["components"]["bedrock"] = {
+            "status": "unhealthy",
+            "message": str(e)
+        }
+        health_status["overall"] = "degraded"
     
     # Check OpenSearch
     try:
         from config.aws import opensearch
         client = opensearch()
-        # Try a simple health check
-        health = client.cluster.health()
-        services.append(ServiceHealth(
-            name="opensearch",
-            status="healthy" if health.get("status") != "red" else "unhealthy",
-            message=f"Cluster status: {health.get('status', 'unknown')}"
-        ))
+        cluster_health = client.cluster.health()
+        health_status["components"]["opensearch"] = {
+            "status": "healthy" if cluster_health.get("status") != "red" else "unhealthy",
+            "message": f"Cluster status: {cluster_health.get('status', 'unknown')}"
+        }
     except Exception as e:
-        services.append(ServiceHealth(
-            name="opensearch",
-            status="unhealthy",
-            message=str(e)
-        ))
-        overall_status = "degraded"
+        health_status["components"]["opensearch"] = {
+            "status": "unhealthy", 
+            "message": str(e)
+        }
+        health_status["overall"] = "degraded"
     
-    # Check S3
+    # Check Pipeline Orchestrator
     try:
-        from config.aws import s3
-        client = s3()
-        services.append(ServiceHealth(
-            name="s3",
-            status="healthy",
-            message="S3 client initialized"
-        ))
+        orchestrator = get_orchestrator()
+        health_status["components"]["orchestrator"] = {
+            "status": "healthy",
+            "message": "Pipeline orchestrator ready",
+            "llm_validation_enabled": orchestrator.enable_llm_validation
+        }
     except Exception as e:
-        services.append(ServiceHealth(
-            name="s3",
-            status="unhealthy",
-            message=str(e)
-        ))
-        overall_status = "degraded"
+        health_status["components"]["orchestrator"] = {
+            "status": "unhealthy",
+            "message": str(e)
+        }
+        health_status["overall"] = "degraded"
     
-    return HealthCheckResponse(
-        status=overall_status,
-        version="1.0.0",
-        services=services,
-        timestamp=datetime.utcnow()
-    )
-
-
-@health_router.get("/ping")
-async def ping():
-    """Simple ping endpoint for load balancer health checks"""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return health_status
 
 
 # ================================
-# Categories Router
+# Debug Router (v2)
 # ================================
 
-categories_router = APIRouter(prefix="/categories", tags=["Categories"])
+debug_router = APIRouter(prefix="/debug", tags=["Debug v2"])
 
 
-@categories_router.get("/query")
-async def get_query_categories():
-    """Get available query categories"""
-    return {
-        "categories": [
-            {"value": cat.value, "label": cat.value.replace("_", " ").title()}
-            for cat in QueryCategory
-        ]
-    }
+@debug_router.post("/analyze")
+async def analyze_query(
+    request: PipelineRequest,
+    raw_request: FastAPIRequest
+):
+    """
+    Analyze a query without generating a full response.
+    
+    Useful for debugging intent classification and stage identification.
+    Returns intent, stage, and retrieval info without full reasoning.
+    """
+    try:
+        from services.agents import IntentAgent, StageAgent
+        import asyncio
+        
+        # Create context
+        context = create_pipeline_context(
+            message=request.message,
+            session_id=request.session_id,
+            conversation_history=request.conversation_history
+        )
+        
+        intent_agent = IntentAgent()
+        stage_agent = StageAgent()
+        
+        # Run in parallel using the agent's run() method
+        results = await asyncio.gather(
+            intent_agent.run(context),
+            stage_agent.run(context),
+            return_exceptions=True
+        )
+        
+        analysis = {
+            "request_id": context.request_id,
+            "message": request.message,
+            "timestamp": datetime.utcnow().isoformat(),
+            "intent": None,
+            "stage": None,
+            "errors": []
+        }
+        
+        # Process intent result
+        if isinstance(results[0], Exception):
+            analysis["errors"].append(f"Intent error: {str(results[0])}")
+        else:
+            intent_ctx, intent_trace = results[0]
+            if intent_ctx.intent_result:
+                analysis["intent"] = {
+                    "category": intent_ctx.intent_result.intent.value if hasattr(intent_ctx.intent_result.intent, 'value') else str(intent_ctx.intent_result.intent),
+                    "confidence": intent_ctx.intent_result.confidence,
+                    "reasoning": intent_ctx.intent_result.reasoning,
+                    "clarification_needed": intent_ctx.intent_result.clarification_needed,
+                    "latency_ms": intent_trace.latency_ms
+                }
+        
+        # Process stage result
+        if isinstance(results[1], Exception):
+            analysis["errors"].append(f"Stage error: {str(results[1])}")
+        else:
+            stage_ctx, stage_trace = results[1]
+            if stage_ctx.stage_result:
+                analysis["stage"] = {
+                    "stage": stage_ctx.stage_result.stage.value if hasattr(stage_ctx.stage_result.stage, 'value') else str(stage_ctx.stage_result.stage),
+                    "certainty": stage_ctx.stage_result.certainty.value if hasattr(stage_ctx.stage_result.certainty, 'value') else str(stage_ctx.stage_result.certainty),
+                    "certainty_score": stage_ctx.stage_result.certainty_score,
+                    "signals": stage_ctx.stage_result.signals,
+                    "latency_ms": stage_trace.latency_ms
+                }
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Analysis error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@categories_router.get("/content")
-async def get_content_types():
-    """Get available content types"""
-    return {
-        "content_types": [
-            {"value": ct.value, "label": ct.value.replace("_", " ").title()}
-            for ct in ContentType
-        ]
-    }
+@debug_router.get("/routing/{intent}")
+async def get_intent_routing(intent: str):
+    """
+    Get routing configuration for a specific intent.
+    
+    Shows which knowledge bases and model are used for this intent.
+    """
+    try:
+        from config.agent_routing import (
+            get_route_for_intent,
+            get_knowledge_bases_for_intent,
+            get_model_for_intent,
+            is_strict_rag
+        )
+        
+        # Parse intent
+        try:
+            intent_category = IntentCategory(intent.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid intent. Valid intents: {[i.value for i in IntentCategory]}"
+            )
+        
+        route = get_route_for_intent(intent_category)
+        
+        return {
+            "intent": intent_category.value,
+            "agent_type": route.agent_type.value,
+            "knowledge_bases": [kb.value for kb in route.knowledge_bases],
+            "model_type": route.model_type.value,
+            "requires_stage": route.requires_stage,
+            "strict_rag": route.strict_rag,
+            "allow_parallel_kb": route.allow_parallel_kb
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Routing lookup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+# ================================
+# Helper Functions
+# ================================
+
+def _extract_user_id(
+    raw_request: FastAPIRequest,
+    authorization: Optional[str],
+    x_user_id: Optional[str],
+    request: PipelineRequest
+) -> str:
+    """Extract user ID from request headers."""
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            import jwt
+            token = authorization.replace("Bearer ", "")
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
+            logger.debug(f"Authenticated user from JWT: {user_id}")
+            return user_id or "oauth_user"
+        except Exception as jwt_error:
+            logger.warning(f"Could not decode JWT: {jwt_error}")
+            return "oauth_user"
+    elif x_user_id:
+        logger.debug(f"Guest user from X-User-ID header: {x_user_id}")
+        return x_user_id
+    else:
+        return "anonymous"
+
+
+async def _log_conversation(
+    request: PipelineRequest,
+    response: PipelineResponse,
+    user_id: str,
+    latency_ms: int
+):
+    """Log conversation to DynamoDB (non-blocking)."""
+    try:
+        conversation_logger = get_conversation_logger()
+        
+        # Map intent to query category for backward compatibility
+        query_category = response.intent if isinstance(response.intent, str) else response.intent.value
+        
+        log_result = await conversation_logger.log_conversation(
+            session_id=request.session_id or response.request_id,
+            user_id=user_id,
+            question=request.message,
+            answer=response.response,
+            query_category=query_category,
+            index_name="multi_agent_pipeline",
+            strict_mode=True,  # Pipeline always uses evidence
+            has_sufficient_evidence=not response.abstained,
+            confidence_score=response.confidence,
+            response_time_ms=latency_ms,
+            sources=[
+                {"title": c.source_file, "score": c.relevance_score}
+                for c in response.citations
+            ]
+        )
+        
+        if log_result:
+            logger.debug(f"Conversation logged: {log_result.get('conversation_id')}")
+            
+    except Exception as log_error:
+        logger.warning(f"Failed to log conversation (non-fatal): {log_error}")
