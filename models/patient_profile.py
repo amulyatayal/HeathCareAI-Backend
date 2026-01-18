@@ -106,6 +106,17 @@ class PatientStageHistory(BaseModel):
 # Patient Profile
 # ================================
 
+import secrets
+import string
+
+def generate_patient_ref_id() -> str:
+    """Generate a unique patient reference ID like 'PAT-XK7M92'."""
+    chars = string.ascii_uppercase + string.digits
+    # Remove ambiguous characters (0, O, I, 1, L)
+    chars = chars.replace('0', '').replace('O', '').replace('I', '').replace('1', '').replace('L', '')
+    random_part = ''.join(secrets.choice(chars) for _ in range(6))
+    return f"PAT-{random_part}"
+
 class PatientProfile(BaseModel):
     """
     Persistent patient profile - stores user-provided data only.
@@ -113,10 +124,16 @@ class PatientProfile(BaseModel):
     Linked to authenticated users via Firebase UID.
     Guest users do not have profiles.
     """
-    # Linking to authenticated user
+    # Primary key - Firebase UID
     user_id: str = Field(
         ...,
         description="Firebase UID from JWT token"
+    )
+    
+    # Patient Reference ID for account linking
+    patient_ref_id: str = Field(
+        default_factory=generate_patient_ref_id,
+        description="Unique patient reference ID (e.g., 'PAT-XK7M92') for account linking"
     )
     
     # Timestamps
@@ -161,6 +178,16 @@ class PatientProfile(BaseModel):
         description="When onboarding was completed"
     )
     
+    # Detailed stage from hierarchical treatment pathway (new system)
+    detailed_stage_id: Optional[str] = Field(
+        None,
+        description="Detailed stage ID from treatment pathway (e.g., '2.1.1')"
+    )
+    detailed_stage_updated_at: Optional[datetime] = Field(
+        None,
+        description="When detailed stage was last updated"
+    )
+    
     class Config:
         use_enum_values = True
         json_encoders = {
@@ -172,7 +199,7 @@ class PatientProfile(BaseModel):
         """Convert to DynamoDB-compatible dict."""
         data = self.dict()
         # Convert datetime objects to ISO strings
-        for key in ['created_at', 'updated_at', 'stage_updated_at', 'onboarding_completed_at']:
+        for key in ['created_at', 'updated_at', 'stage_updated_at', 'onboarding_completed_at', 'detailed_stage_updated_at']:
             if data.get(key):
                 data[key] = data[key].isoformat() if isinstance(data[key], datetime) else data[key]
         # Convert nested datetimes in stage_history
@@ -204,6 +231,25 @@ class OnboardingRequest(BaseModel):
         ...,
         description="Selected situation from onboarding wizard"
     )
+    # Optional treatment type (patient-friendly selection)
+    treatment_type: Optional[str] = Field(
+        None,
+        description="Type of treatment (surgery, chemotherapy, etc.)"
+    )
+    # Optional detailed stage ID (mapped from treatment_type)
+    detailed_stage_id: Optional[str] = Field(
+        None,
+        description="Detailed stage ID from treatment pathway"
+    )
+    # GDPR-compliant profile fields
+    age_range: Optional[str] = Field(
+        None,
+        description="Age range bracket (e.g., '40-49')"
+    )
+    postal_code: Optional[str] = Field(
+        None,
+        description="Postal code area (first part only, e.g., 'SW1')"
+    )
     # Optional detailed information
     diagnosis_date: Optional[str] = Field(
         None,
@@ -228,6 +274,14 @@ class StageUpdateRequest(BaseModel):
     new_stage: PatientStage = Field(
         ...,
         description="New stage to set"
+    )
+
+
+class LinkAccountRequest(BaseModel):
+    """Request to link a profile from another account."""
+    patient_ref_id: str = Field(
+        ...,
+        description="Patient Reference ID of the profile to link (e.g., 'PAT-XK7M92')"
     )
 
 

@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../HealthCareAI-FrontEnd"
+		},
+		{
+			"path": "../ai-search-frontend"
+		}
+	],
+	"settings": {}
+}

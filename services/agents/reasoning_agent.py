@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from services.agents.base_agent import BaseAgent, AgentError
 from services.agents.retrieval_agent import format_chunks_for_prompt, get_citations_from_chunks
 from services.agents.stage_agent import get_stage_guidelines
+from services.patient_stage_service import get_patient_stage_service
 from models.schemas import (
     PipelineContext,
     ReasoningResult,
@@ -194,7 +195,7 @@ class ReasoningAgent(BaseAgent):
         try:
             # Build the prompts
             system_prompt = self._build_system_prompt(context)
-            user_prompt = self._build_user_prompt(context)
+            user_prompt = await self._build_user_prompt(context)
             
             # Generate response
             response_text = await self.invoke_llm(
@@ -314,24 +315,58 @@ class ReasoningAgent(BaseAgent):
             disclaimer_instruction=disclaimer_instruction
         )
     
-    def _build_user_prompt(self, context: PipelineContext) -> str:
+    async def _build_user_prompt(self, context: PipelineContext) -> str:
         """Build the user prompt with question and context."""
-        # Get stage info
+        # Get basic stage info
         stage = PatientStage.UNKNOWN
         stage_certainty = "unknown"
         if context.stage_result:
             stage = context.stage_result.stage
             stage_certainty = context.stage_result.certainty
         
-        # Build stage context
+        # Build stage context - using PathwayOrchestrator for rich context
         stage_context = ""
-        if context.stage_result and context.stage_result.signals:
-            stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+        
+        # Check if detailed stage is available in context metadata
+        detailed_stage_id = None
+        if hasattr(context, 'metadata') and context.metadata:
+            detailed_stage_id = context.metadata.get('detailed_stage_id')
+        
+        # Try to use orchestrator for rich context
+        try:
+             # Lazy import to avoid circular dependency
+            from services.pathway_orchestrator import PathwayOrchestrator
+            orchestrator = PathwayOrchestrator()
+            
+            # If we have a user_id, get persistent context
+            if context.user_id:
+                stage_context = await orchestrator.get_rag_context(context.user_id)
+            
+            # If we have an explicit stage in metadata (e.g. from UI override), use that
+            elif detailed_stage_id:
+                stage_service = get_patient_stage_service()
+                stage = stage_service.get_stage(detailed_stage_id)
+                if stage:
+                    # Construct ephemeral context for this request
+                    p_ctx = []
+                    p_ctx.append(f"CURRENT STAGE: {stage.name}")
+                    p_ctx.append(f"Description: {stage.description}")
+                    if stage.transition_notes:
+                        p_ctx.append(f"Notes: {stage.transition_notes}")
+                    stage_context = "\n".join(p_ctx)
+        except Exception as e:
+            logger.warning(f"Orchestrator context failed: {e}")
+            # Fallback to simple signal string
+            if context.stage_result and context.stage_result.signals:
+                stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+        
+        # Determine certainty string
+        certainty_str = stage_certainty.value if hasattr(stage_certainty, 'value') else str(stage_certainty)
         
         return REASONING_USER_TEMPLATE.format(
             question=context.user_message,
             stage=stage,
-            stage_certainty=stage_certainty,
+            stage_certainty=certainty_str, # Fix: pass string not enum
             stage_context=stage_context
         )
     

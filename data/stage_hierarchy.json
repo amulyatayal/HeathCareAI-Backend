@@ -1,0 +1,1017 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-01-17T23:11:36.675104Z",
+  "source_file": "Knowledge Base Bank - BreastCancerStages.csv",
+  "total_stages": 52,
+  "root_stage_ids": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "stages": {
+    "0.1": {
+      "stage_id": "0.1",
+      "name": "Pre-diagnosis",
+      "description": "- Patient goes for tests, and mammogragm , Ultasound, US and biopsy. It can be either of the following- Mammogram + Biopsy, or US + bioposy or MMG+US_Biopsy",
+      "parent_stage_id": "0",
+      "child_stage_ids": [],
+      "before_stages": [],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Getting Tests Done",
+      "search_terms": [
+        "waiting for results",
+        "having tests",
+        "mammogram",
+        "biopsy",
+        "waiting to find out"
+      ]
+    },
+    "1": {
+      "stage_id": "1",
+      "name": "Results Clinic",
+      "description": "Patient is given diagnosis for the first time. This is a very sensitive step as the patient is hearing the news for the first time",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.5"
+      ],
+      "before_stages": [
+        "0.1"
+      ],
+      "after_stages": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.5"
+      ],
+      "transition_notes": "metastasis - curative treatment not possible",
+      "is_patient_facing": true,
+      "display_name": "Receiving My Diagnosis",
+      "search_terms": [
+        "got my diagnosis",
+        "found out I have cancer",
+        "just diagnosed",
+        "hearing the news"
+      ]
+    },
+    "1.1": {
+      "stage_id": "1.1",
+      "name": "palliative",
+      "description": "Metastasis has happened and hence curative treatment is not possible.",
+      "parent_stage_id": "1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Comfort & Supportive Care",
+      "search_terms": [
+        "incurable",
+        "comfort care",
+        "quality of life",
+        "managing symptoms"
+      ]
+    },
+    "1.2": {
+      "stage_id": "1.2",
+      "name": "primary endocrine",
+      "description": "endocrine (anti hormone medication) as first line treatment . There are multiple reasons for chosing this treatment path, the most common one being patient may not be fit for surgery.",
+      "parent_stage_id": "1",
+      "child_stage_ids": [
+        "1.2.1"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1.2.1"
+      ],
+      "transition_notes": "Hormone therapy is effective on the patient",
+      "is_patient_facing": true,
+      "display_name": "Starting Hormone Therapy",
+      "search_terms": [
+        "hormone pills",
+        "taking tablets",
+        "hormone blocker"
+      ]
+    },
+    "1.2.1": {
+      "stage_id": "1.2.1",
+      "name": "Follow-up Clinic",
+      "description": "follow up to see if hormone treatment is working with a Specialist Clinician (this is not same as results clinic)",
+      "parent_stage_id": "1.2",
+      "child_stage_ids": [
+        "1.2.1.1",
+        "1.2.1.2"
+      ],
+      "before_stages": [
+        "1.2"
+      ],
+      "after_stages": [
+        "1.2.1.1",
+        "1.2.1.2"
+      ],
+      "transition_notes": "treatment is working",
+      "is_patient_facing": true,
+      "display_name": "My Follow-up Appointment",
+      "search_terms": []
+    },
+    "1.2.1.1": {
+      "stage_id": "1.2.1.1",
+      "name": "Continue same endocrine treatment",
+      "description": "If, on follow up, cancer is reducing in size, then you are okay to continue on same medication",
+      "parent_stage_id": "1.2.1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1.2.1"
+      ],
+      "after_stages": [
+        "1.2.1.1"
+      ],
+      "transition_notes": "Treatment is not working",
+      "is_patient_facing": true,
+      "display_name": "Continuing My Hormone Treatment",
+      "search_terms": []
+    },
+    "1.2.1.2": {
+      "stage_id": "1.2.1.2",
+      "name": "Change to another medication",
+      "description": "If, on follow up, cancer is getting bigger, then doctors will put you on another anti hormone medication, or discuss surgery with you (see stage 2)",
+      "parent_stage_id": "1.2.1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1.2.1"
+      ],
+      "after_stages": [
+        "1.2.1.1",
+        "2"
+      ],
+      "transition_notes": "Treatment is not working",
+      "is_patient_facing": true,
+      "display_name": "Trying a Different Medication",
+      "search_terms": []
+    },
+    "1.3": {
+      "stage_id": "1.3",
+      "name": "Further investigation",
+      "description": "Following review of previous work up in the MDM, patient is reviewed in results clinic to discuss next step, which could be either to start treatment or for further investigation,",
+      "parent_stage_id": "1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "More Tests Needed",
+      "search_terms": []
+    },
+    "2": {
+      "stage_id": "2",
+      "name": "Surgery",
+      "description": "Master Stage for various surgery types. The patient may go through some of the surgies in the steps 2.1 or 2.2 etc. and end up in a psot surgery MDM where the next stpes are defined.",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "2.1",
+        "2.2"
+      ],
+      "before_stages": [
+        "1",
+        "3",
+        "1.2",
+        "1.2.1"
+      ],
+      "after_stages": [
+        "post surgery MDM"
+      ],
+      "transition_notes": "occurence of surgery",
+      "is_patient_facing": true,
+      "display_name": "Surgery",
+      "search_terms": []
+    },
+    "2.1": {
+      "stage_id": "2.1",
+      "name": "Breast surgery",
+      "description": "Operations on the breast to remove cancer and, when possible, preserve appearance and function",
+      "parent_stage_id": "2",
+      "child_stage_ids": [
+        "2.1.1",
+        "2.1.2"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Having My Surgery",
+      "search_terms": [
+        "having surgery",
+        "going for operation",
+        "surgery date",
+        "had my operation"
+      ]
+    },
+    "2.1.1": {
+      "stage_id": "2.1.1",
+      "name": "Breast Conservation Surgery",
+      "description": "Operations which remove the cancer while keeping most of the breast, almost always followed by radiotherapy",
+      "parent_stage_id": "2.1",
+      "child_stage_ids": [
+        "2.1.1.1",
+        "2.1.1.2"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Breast Conservation Surgery",
+      "search_terms": []
+    },
+    "2.1.1.1": {
+      "stage_id": "2.1.1.1",
+      "name": "Wide local excision",
+      "description": "Operation to removes the cancer with a margin of healthy tissue, keeping the rest of the breast, when the cancer to breast size ratio allows (for example, small cancer in large breast)",
+      "parent_stage_id": "2.1.1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Wide Local Excision",
+      "search_terms": []
+    },
+    "2.1.1.2": {
+      "stage_id": "2.1.1.2",
+      "name": "Oncoplastic Breast Conservation Surgery",
+      "description": "Operations which combines cancer removal with plastic surgery techniques to improve breast shap.",
+      "parent_stage_id": "2.1.1",
+      "child_stage_ids": [
+        "2.1.1.2.1",
+        "2.1.1.2.2"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Oncoplastic Breast Conservation Surgery",
+      "search_terms": []
+    },
+    "2.1.1.2.1": {
+      "stage_id": "2.1.1.2.1",
+      "name": "Therapeutic mammaplasty/mammoplasty",
+      "description": "Operation which combines cancer removal, with breast-reduction techniques, allowing removal of bigger cancer from big/droopy breast. This may or may not be comined with reduction of the other breast to symmetrize",
+      "parent_stage_id": "2.1.1.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Therapeutic Mammaplasty/Mammoplasty",
+      "search_terms": []
+    },
+    "2.1.1.2.2": {
+      "stage_id": "2.1.1.2.2",
+      "name": "Chest wall perforator flap",
+      "description": "Operation which combines cancer removal, and use of nearby skin and fat to fill the defect after cancer removal, allowing removal of bigger cancer from small breast",
+      "parent_stage_id": "2.1.1.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Chest Wall Perforator Flap",
+      "search_terms": []
+    },
+    "2.1.2": {
+      "stage_id": "2.1.2",
+      "name": "Mastectomy",
+      "description": "Operations which remove all the breast tissue, including the cancer",
+      "parent_stage_id": "2.1",
+      "child_stage_ids": [
+        "2.1.2.1",
+        "2.1.2.2"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Full Breast Removal",
+      "search_terms": [
+        "breast removed",
+        "mastectomy",
+        "lost my breast",
+        "took the whole breast"
+      ]
+    },
+    "2.1.2.1": {
+      "stage_id": "2.1.2.1",
+      "name": "Simple mastectomy no reconstruction",
+      "description": "Operation which remove all the breast tissue, including the cancer without rebuilding (going flat chest, with scar)",
+      "parent_stage_id": "2.1.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Simple Mastectomy No Reconstruction",
+      "search_terms": []
+    },
+    "2.1.2.2": {
+      "stage_id": "2.1.2.2",
+      "name": "Mastectomy and reconstruction",
+      "description": "Operation which remove all the breast tissue, including the cancer, and rebuild the breast mound",
+      "parent_stage_id": "2.1.2",
+      "child_stage_ids": [
+        "2.1.2.2.1",
+        "2.1.2.2.2"
+      ],
+      "before_stages": [],
+      "after_stages": [],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Mastectomy And Reconstruction",
+      "search_terms": []
+    },
+    "2.1.2.2.1": {
+      "stage_id": "2.1.2.2.1",
+      "name": "autologous reconstruction",
+      "description": "Breast rebuilt using your own tissue from another body area",
+      "parent_stage_id": "2.1.2.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Autologous Reconstruction",
+      "search_terms": []
+    },
+    "2.1.2.2.2": {
+      "stage_id": "2.1.2.2.2",
+      "name": "Implant based reconstruction",
+      "description": "Breast rebuilt using a silicone or saline implant",
+      "parent_stage_id": "2.1.2.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Implant Based Reconstruction",
+      "search_terms": []
+    },
+    "2.2": {
+      "stage_id": "2.2",
+      "name": "Axillary surgery",
+      "description": "Surgery to assess or treat lymph nodes under the arm, helping guide breast cancer treatment decisions.",
+      "parent_stage_id": "2",
+      "child_stage_ids": [
+        "2.2.1",
+        "2.2.2",
+        "2.2.3"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Axillary Surgery",
+      "search_terms": []
+    },
+    "2.2.1": {
+      "stage_id": "2.2.1",
+      "name": "No surgery",
+      "description": "No indication to remove or sample lymph nodes under the arm, because the risk of cancer spread is very low, usally in case of (non invasive breast cancer)",
+      "parent_stage_id": "2.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Surgery",
+      "search_terms": []
+    },
+    "2.2.2": {
+      "stage_id": "2.2.2",
+      "name": "Sentinel lymph node biopsy",
+      "description": "Operation in which only the first 1-3 draining lymph nodes are removed to check for cancer spread.",
+      "parent_stage_id": "2.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Sentinel Lymph Node Biopsy",
+      "search_terms": []
+    },
+    "2.2.3": {
+      "stage_id": "2.2.3",
+      "name": "Axillary Lymph node clearance",
+      "description": "Operation in which \"all\" underarm lymph nodes are removed to treat known cancer spread, and assess cancer burden to plan further treatments.This is done when there is confimed cancer spread in the lymph nodes.",
+      "parent_stage_id": "2.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Axillary Lymph Node Clearance",
+      "search_terms": []
+    },
+    "3": {
+      "stage_id": "3",
+      "name": "Neoadjuvant systemic treatment",
+      "description": "Treatment given before surgery to shrink the cancer and improve surgical and long-term outcomes.",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "3.1",
+        "3.2",
+        "3.3",
+        "3.4"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "2"
+      ],
+      "transition_notes": "completion of chemotherapy",
+      "is_patient_facing": true,
+      "display_name": "Neoadjuvant Systemic Treatment",
+      "search_terms": []
+    },
+    "3.1": {
+      "stage_id": "3.1",
+      "name": "Neoadjuvant chemotherapy",
+      "description": "Anti-cancer drugs given before surgery to kill cancer cells",
+      "parent_stage_id": "3",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "2"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Neoadjuvant Chemotherapy",
+      "search_terms": []
+    },
+    "3.2": {
+      "stage_id": "3.2",
+      "name": "Neoadjuvant chemotherapy with immunotherapy",
+      "description": "Chemotherapy combined with immune-boosting treatment, before surgery, to help your body attack cancer cells, usually used in specifc breast cancer type (called triple negative cancer)",
+      "parent_stage_id": "3",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "2"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Neoadjuvant Chemotherapy With Immunotherapy",
+      "search_terms": []
+    },
+    "3.3": {
+      "stage_id": "3.3",
+      "name": "Neoadjuvant chemotherapy with targeted therapy",
+      "description": "Chemotherapy combined with drugs targeting specific cancer features or pathways, before surgery, improving response to chemotherapy, and and reducing recurrence risk, usually used in specifc breast cancer type (e.g. blocking growth factor receptors in HER2 +ve cancer)",
+      "parent_stage_id": "3",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "2"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Neoadjuvant Chemotherapy With Targeted Therapy",
+      "search_terms": []
+    },
+    "3.4": {
+      "stage_id": "3.4",
+      "name": "Neoadjuvant endocrine treatment",
+      "description": "Hormone-blocking treatment, given before surgery, to slow growth of cancer if you are temporary unfit for surgery, or to shrink the cancer if you are unfit for traditional chemotherapy. This can be only used in hormone-sensitive breast cancer,",
+      "parent_stage_id": "3",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "2"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Neoadjuvant Endocrine Treatment",
+      "search_terms": []
+    },
+    "4": {
+      "stage_id": "4",
+      "name": "primary treatment (surgery +/-chemo complete",
+      "description": "",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "4.1"
+      ],
+      "before_stages": [],
+      "after_stages": [],
+      "transition_notes": "primary treatment (surgery +/-chemo complete",
+      "is_patient_facing": true,
+      "display_name": "Primary Treatment (Surgery +/-Chemo Complete",
+      "search_terms": []
+    },
+    "4.1": {
+      "stage_id": "4.1",
+      "name": "no further treatment",
+      "description": "",
+      "parent_stage_id": "4",
+      "child_stage_ids": [],
+      "before_stages": [
+        "2",
+        "3"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Further Treatment",
+      "search_terms": []
+    },
+    "4.2.1": {
+      "stage_id": "4.2.1",
+      "name": "radiotherapy",
+      "description": "",
+      "parent_stage_id": "4.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "2",
+        "3"
+      ],
+      "after_stages": [
+        "5",
+        "4.2.2",
+        "4.2.3",
+        "4.2.4"
+      ],
+      "transition_notes": "completion of Radiotherapy",
+      "is_patient_facing": true,
+      "display_name": "Radiation Treatment",
+      "search_terms": [
+        "radiation",
+        "radiotherapy",
+        "zapping",
+        "radio treatment",
+        "getting zapped"
+      ]
+    },
+    "4.2.2": {
+      "stage_id": "4.2.2",
+      "name": "endocrine",
+      "description": "",
+      "parent_stage_id": "4.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "2",
+        "3",
+        "4.2.1"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Endocrine",
+      "search_terms": []
+    },
+    "4.2.3": {
+      "stage_id": "4.2.3",
+      "name": "endocrine + Zolendronic acid",
+      "description": "",
+      "parent_stage_id": "4.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "2",
+        "3",
+        "4.2.1"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Endocrine + Zolendronic Acid",
+      "search_terms": []
+    },
+    "4.2.4": {
+      "stage_id": "4.2.4",
+      "name": "zolendronic acid",
+      "description": "",
+      "parent_stage_id": "4.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "2",
+        "3",
+        "4.2.1"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Zolendronic Acid",
+      "search_terms": []
+    },
+    "1.5": {
+      "stage_id": "1.5",
+      "name": "awaiting further investigations",
+      "description": "",
+      "parent_stage_id": "1",
+      "child_stage_ids": [],
+      "before_stages": [
+        "multiple"
+      ],
+      "after_stages": [
+        "multiple"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Awaiting Further Investigations",
+      "search_terms": []
+    },
+    "5": {
+      "stage_id": "5",
+      "name": "Survival",
+      "description": "",
+      "parent_stage_id": null,
+      "child_stage_ids": [],
+      "before_stages": [],
+      "after_stages": [],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Survival",
+      "search_terms": []
+    },
+    "6": {
+      "stage_id": "6",
+      "name": "Further surgery",
+      "description": "After pathology review of the first surgery, further surgery may be needed if there is suspicion of residual cancer in the breast or in the lymph nodes",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "6.1",
+        "6.2",
+        "6.3"
+      ],
+      "before_stages": [],
+      "after_stages": [],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Further Surgery",
+      "search_terms": []
+    },
+    "6.1": {
+      "stage_id": "6.1",
+      "name": "Axilla lymph node clearance",
+      "description": "Operation in which \"all\" underarm lymph nodes are removed to treat known cancer spread, and assess cancer burden to plan further treatments.This is done when there is confimed cancer spread in the lymph nodes.",
+      "parent_stage_id": "6",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1",
+        "7"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Axilla Lymph Node Clearance",
+      "search_terms": []
+    },
+    "6.2": {
+      "stage_id": "6.2",
+      "name": "Breast margin excision",
+      "description": "operation in which breast tissue (suspected to contain residual cancer), is removed.",
+      "parent_stage_id": "6",
+      "child_stage_ids": [
+        "6.2.1"
+      ],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "1",
+        "6.2.1",
+        "6.3",
+        "7"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Breast Margin Excision",
+      "search_terms": []
+    },
+    "6.2.1": {
+      "stage_id": "6.2.1",
+      "name": "Further breast margin excision",
+      "description": "operation in which further tissue (suspected to contain residual cancer), is removed from the breast",
+      "parent_stage_id": "6.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1",
+        "6.2"
+      ],
+      "after_stages": [
+        "1",
+        "6.3",
+        "7"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Further Breast Margin Excision",
+      "search_terms": []
+    },
+    "6.3": {
+      "stage_id": "6.3",
+      "name": "Completion mastectomy",
+      "description": "operation in which all breast tissue is removed, as it is suscpected to contain residual cancer",
+      "parent_stage_id": "6",
+      "child_stage_ids": [],
+      "before_stages": [
+        "1",
+        "6.2",
+        "6.2.1"
+      ],
+      "after_stages": [
+        "1",
+        "7"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Completion Mastectomy",
+      "search_terms": []
+    },
+    "7": {
+      "stage_id": "7",
+      "name": "No further surgery",
+      "description": "No need for further operation, as there residual cancer is not suspected",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "7.1",
+        "7.2"
+      ],
+      "before_stages": [],
+      "after_stages": [],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Further Surgery",
+      "search_terms": []
+    },
+    "7.1": {
+      "stage_id": "7.1",
+      "name": "No adjuvant treatment",
+      "description": "No need for further treatment after surgery",
+      "parent_stage_id": "7",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Adjuvant Treatment",
+      "search_terms": []
+    },
+    "7.2": {
+      "stage_id": "7.2",
+      "name": "Adjuvant treatment",
+      "description": "Further treatment is needed after surgery, aiming mainly to reduce risk of recurrence",
+      "parent_stage_id": "7",
+      "child_stage_ids": [
+        "7.2.1",
+        "7.2.2"
+      ],
+      "before_stages": [
+        "7"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Adjuvant Treatment",
+      "search_terms": []
+    },
+    "7.2.1": {
+      "stage_id": "7.2.1",
+      "name": "Adjuvant radiotherapy",
+      "description": "Treament with radiation to the breast (after breast conservation surgery), or to chest wall (after mastecomy, advanced cancer), or to other nodal areas (like supraclavicular or internal mammary areas)",
+      "parent_stage_id": "7.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7"
+      ],
+      "after_stages": [
+        "5",
+        "8",
+        "9"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Adjuvant Radiotherapy",
+      "search_terms": []
+    },
+    "7.2.2": {
+      "stage_id": "7.2.2",
+      "name": "No adjuvant radiotherapy",
+      "description": "",
+      "parent_stage_id": "7.2",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7"
+      ],
+      "after_stages": [
+        "5",
+        "9"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Adjuvant Radiotherapy",
+      "search_terms": []
+    },
+    "8": {
+      "stage_id": "8",
+      "name": "adjuvant chemotherapy",
+      "description": "Systemic adminstration of medications to kill cancer cells. Chemotherapy may be combined with immunotherapy (for triple negative cancer), or targeted therapy (in HER2 positive cancer), or with zoledronic acid (for women with high risk breast cancer, to reduce risk of bone recurrence)",
+      "parent_stage_id": null,
+      "child_stage_ids": [],
+      "before_stages": [
+        "1"
+      ],
+      "after_stages": [
+        "7.2.1",
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Chemotherapy After Surgery",
+      "search_terms": [
+        "chemo after surgery",
+        "post-surgery chemo",
+        "starting chemo"
+      ]
+    },
+    "9.1": {
+      "stage_id": "9.1",
+      "name": "No adjuvant endocrine therapy",
+      "description": "endocrine therapy not indciated in patient with non hormonally sensitive breast cancer",
+      "parent_stage_id": "9",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7.2.1",
+        "7.2.2",
+        "8"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "No Adjuvant Endocrine Therapy",
+      "search_terms": []
+    },
+    "9.2": {
+      "stage_id": "9.2",
+      "name": "adjuvant endocrine therapy only",
+      "description": "endocrine therapy is indciated in patients with estrogen receptor positive breast cancer",
+      "parent_stage_id": "9",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7.2.1",
+        "7.2.2",
+        "8"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Adjuvant Endocrine Therapy Only",
+      "search_terms": []
+    },
+    "9.3": {
+      "stage_id": "9.3",
+      "name": "adjuvant endocrine therap, and zoledronic acid",
+      "description": "In postmenopasual women, zoledronic acid is indicated, in combination with endocrine therapy, to improve survival by inhibiting bone breakdown",
+      "parent_stage_id": "9",
+      "child_stage_ids": [],
+      "before_stages": [
+        "7.2.1",
+        "7.2.2",
+        "8"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Adjuvant Endocrine Therap, And Zoledronic Acid",
+      "search_terms": []
+    },
+    "9": {
+      "stage_id": "9",
+      "name": "Adjuvant endocrine therapy",
+      "description": "Therapy to block hormones after primary treatment to reduce recurrence risk.",
+      "parent_stage_id": null,
+      "child_stage_ids": [
+        "9.1",
+        "9.2",
+        "9.3"
+      ],
+      "before_stages": [
+        "7.2.1",
+        "7.2.2",
+        "8"
+      ],
+      "after_stages": [
+        "5"
+      ],
+      "transition_notes": null,
+      "is_patient_facing": true,
+      "display_name": "Adjuvant Endocrine Therapy",
+      "search_terms": []
+    }
+  }
+}

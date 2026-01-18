@@ -180,7 +180,7 @@ class PipelineOrchestrator:
                     needs_onboarding = True
                     logger.info(f"User {user_id} needs onboarding")
             else:
-                # Guest user - use UNKNOWN stage
+                # Guest user - using UNKNOWN stage
                 ctx.stage_result = StageResult(
                     stage=PatientStage.UNKNOWN,
                     certainty=CertaintyLevel.LOW,
@@ -188,6 +188,35 @@ class PipelineOrchestrator:
                     signals=["Guest user"]
                 )
                 logger.debug("Guest user - using UNKNOWN stage")
+            
+            # ============================================
+            # PHASE 0.5: Pathway Orchestrator (Proposals)
+            # ============================================
+            modification_proposal = None
+            if user_id and not is_guest:
+                try:
+                    from services.pathway_orchestrator import PathwayOrchestrator, StageUpdateType
+                    # Use a fresh orchestrator instance
+                    path_orch = PathwayOrchestrator()
+                    
+                    # Check for stage updates based on text
+                    update_result = await path_orch.determine_current_stage(
+                        patient_id=user_id,
+                        user_text=message
+                    )
+                    
+                    if update_result.update_type == StageUpdateType.PROPOSAL:
+                        from models.schemas import ModificationProposal
+                        modification_proposal = ModificationProposal(
+                            stage_id=update_result.stage_id,
+                            stage_name=update_result.stage_name,
+                            confidence=update_result.confidence,
+                            message=update_result.message
+                        )
+                        logger.info(f"Pathway proposal generated: {modification_proposal.stage_name}")
+                        
+                except Exception as po_error:
+                    logger.warning(f"Pathway Orchestrator error: {po_error}")
             
             # ============================================
             # PHASE 1: Intent Classification Only
@@ -218,7 +247,8 @@ class PipelineOrchestrator:
             return self._build_response(
                 ctx, start_time, include_trace, 
                 needs_onboarding=needs_onboarding,
-                is_guest=is_guest
+                is_guest=is_guest,
+                modification_proposal=modification_proposal
             )
             
         except Exception as e:
@@ -391,7 +421,8 @@ class PipelineOrchestrator:
         start_time: float,
         include_trace: bool,
         needs_onboarding: bool = False,
-        is_guest: bool = True
+        is_guest: bool = True,
+        modification_proposal: Optional['ModificationProposal'] = None
     ) -> PipelineResponse:
         """Build the final pipeline response."""
         total_latency = int((time.time() - start_time) * 1000)
@@ -416,7 +447,8 @@ class PipelineOrchestrator:
             trace=self._traces if include_trace else [],
             total_latency_ms=total_latency,
             needs_onboarding=needs_onboarding,
-            sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest)
+            sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest),
+            modification_proposal=modification_proposal
         )
         # Emit metrics
         record_latency(

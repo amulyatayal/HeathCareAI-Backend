@@ -155,6 +155,7 @@ class PipelineContext(BaseModel):
         description="Previous messages in the conversation"
     )
     session_id: Optional[str] = Field(None, description="Session identifier for tracking")
+    user_id: Optional[str] = Field(None, description="User identifier for personalization")
     
     # Agent outputs (populated as pipeline progresses)
     intent_result: Optional[IntentResult] = Field(None)
@@ -166,6 +167,12 @@ class PipelineContext(BaseModel):
     # Pipeline control
     should_abort: bool = Field(default=False, description="Whether to abort pipeline early")
     abort_reason: Optional[str] = Field(None)
+    
+    # Generic metadata for extended context
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional context metadata (e.g., detailed_stage_id)"
+    )
     
     class Config:
         json_encoders = {
@@ -192,6 +199,13 @@ class AgentTrace(BaseModel):
 # Pipeline Response
 # ================================
 
+class ModificationProposal(BaseModel):
+    """Proposal to update patient stage based on conversation."""
+    stage_id: str
+    stage_name: str
+    confidence: float
+    message: str
+
 class PipelineResponse(BaseModel):
     """Final response from the multi-agent pipeline."""
     request_id: str
@@ -215,6 +229,10 @@ class PipelineResponse(BaseModel):
     sign_in_suggestion: Optional[str] = Field(
         None,
         description="Markdown text suggesting guest user sign in (shown in response)"
+    )
+    modification_proposal: Optional[ModificationProposal] = Field(
+        None,
+        description="Proposal to change patient stage based on inference"
     )
     
     class Config:

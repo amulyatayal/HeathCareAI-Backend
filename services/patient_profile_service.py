@@ -178,6 +178,11 @@ class PatientProfileService:
             source="onboarding"
         ))
         
+        # Set detailed stage ID if provided (from treatment type mapping)
+        if data.detailed_stage_id:
+            profile.detailed_stage_id = data.detailed_stage_id
+            profile.detailed_stage_updated_at = now
+        
         try:
             self.table.put_item(Item=profile.to_dynamodb_item())
             logger.info(
@@ -245,6 +250,46 @@ class PatientProfileService:
             logger.error(f"Error updating stage for {user_id}: {e}")
             raise
     
+    async def update_stage_detailed(
+        self, 
+        user_id: str, 
+        detailed_stage_id: str
+    ) -> PatientProfile:
+        """
+        Update patient's detailed treatment stage from hierarchical pathway.
+        
+        Args:
+            user_id: Firebase UID from JWT token
+            detailed_stage_id: Stage ID from treatment pathway (e.g., '2.1.1')
+            
+        Returns:
+            Updated PatientProfile
+            
+        Raises:
+            ValueError: If profile not found
+        """
+        profile = await self.get_profile(user_id)
+        if not profile:
+            raise ValueError(f"Profile not found for user {user_id}")
+        
+        now = datetime.utcnow()
+        
+        # Update detailed stage
+        profile.detailed_stage_id = detailed_stage_id
+        profile.detailed_stage_updated_at = now
+        profile.updated_at = now
+        
+        try:
+            self.table.put_item(Item=profile.to_dynamodb_item())
+            logger.info(
+                f"Updated detailed stage for user {user_id}: {detailed_stage_id}"
+            )
+            return profile
+            
+        except ClientError as e:
+            logger.error(f"Error updating detailed stage for {user_id}: {e}")
+            raise
+    
     async def delete_profile(self, user_id: str) -> bool:
         """
         Delete a patient profile.
@@ -262,6 +307,80 @@ class PatientProfileService:
             
         except ClientError as e:
             logger.error(f"Error deleting profile for {user_id}: {e}")
+            raise
+
+    async def get_profile_by_ref_id(self, ref_id: str) -> Optional[PatientProfile]:
+        """
+        Find profile by patient reference ID.
+        
+        Args:
+            ref_id: Patient Reference ID (e.g., 'PAT-XK7M92')
+            
+        Returns:
+            PatientProfile if found, None otherwise
+        """
+        try:
+            # Check for exact match using scan (efficient enough for MVP)
+            # For production, use a GSI on patient_ref_id
+            response = self.table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('patient_ref_id').eq(ref_id)
+            )
+            items = response.get('Items', [])
+            
+            if items:
+                return PatientProfile.from_dynamodb_item(items[0])
+            return None
+            
+        except ClientError as e:
+            logger.error(f"Error finding profile by ref_id {ref_id}: {e}")
+            raise
+
+    async def link_account(self, new_user_id: str, ref_id: str) -> PatientProfile:
+        """
+        Link a profile from another account to the current user.
+        
+        This moves the profile ownership:
+        1. Find source profile by ref_id
+        2. Create copy with new_user_id
+        3. Delete old profile
+        
+        Args:
+            new_user_id: Current authenticated user ID
+            ref_id: Patient Reference ID to link
+            
+        Returns:
+            The linked (copied) PatientProfile
+            
+        Raises:
+            ValueError: If profile not found or already linked
+        """
+        # 1. Find source profile
+        source_profile = await self.get_profile_by_ref_id(ref_id)
+        if not source_profile:
+            raise ValueError(f"No profile found with Reference ID: {ref_id}")
+            
+        if source_profile.user_id == new_user_id:
+            raise ValueError("This profile is already linked to your account")
+            
+        logger.info(f"Linking profile {ref_id} from {source_profile.user_id} to {new_user_id}")
+        
+        # 2. Create copy for new user
+        new_profile = source_profile.copy(deep=True)
+        new_profile.user_id = new_user_id
+        new_profile.updated_at = datetime.utcnow()
+        
+        # Save new profile
+        try:
+            self.table.put_item(Item=new_profile.to_dynamodb_item())
+            
+            # 3. Delete old profile (transfer ownership)
+            await self.delete_profile(source_profile.user_id)
+            
+            logger.info(f"Successfully linked profile {ref_id} to {new_user_id}")
+            return new_profile
+            
+        except ClientError as e:
+            logger.error(f"Error linking profile for {new_user_id}: {e}")
             raise
     
     def _parse_dynamodb_item(self, item: dict) -> PatientProfile:
