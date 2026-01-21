@@ -328,34 +328,54 @@ async def select_treatment_stage(
     """
     logger.info(f"User {user_id} selecting stage: {data.stage_id}")
     
-    logger.info(f"User {user_id} selecting stage: {data.stage_id}")
-    
-    # Use PathwayOrchestrator to handle the selection with validation
-    from services.pathway_orchestrator import PathwayOrchestrator, StageUpdateType
-    orchestrator = PathwayOrchestrator()
-    
-    result = await orchestrator.determine_current_stage(
-        patient_id=user_id,
-        user_text="",  # No text for explicit selection
-        explicit_stage_id=data.stage_id
-    )
-    
-    if result.update_type == StageUpdateType.VALIDATION_ERROR:
-        raise HTTPException(
-            status_code=400,
-            detail=result.error or "Invalid stage selection"
-        )
+    try:
+        # Validate stage exists
+        stage_service = get_patient_stage_service()
+        stage = stage_service.get_stage_by_id(data.stage_id)
         
-    # Get updated details for response
-    stage_service = get_patient_stage_service()
-    breadcrumb = stage_service.get_breadcrumb(data.stage_id)
-    
-    return {
-        "message": result.message,
-        "stage_id": data.stage_id,
-        "stage_name": result.stage_name,
-        "breadcrumb": breadcrumb
-    }
+        if not stage:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid stage ID: {data.stage_id}"
+            )
+        
+        # Update user profile with selected stage
+        profile_service = get_patient_profile_service()
+        profile = await profile_service.get_profile(user_id)
+        
+        if not profile:
+            # Create profile if it doesn't exist (for guest users)
+            from models.patient_profile import PatientProfile
+            profile = PatientProfile(
+                user_id=user_id,
+                current_stage="unknown",
+                onboarding_completed=False
+            )
+        
+        # Update the detailed stage
+        profile.detailed_stage_id = data.stage_id
+        await profile_service.save_profile(profile)
+        
+        # Get breadcrumb for response
+        breadcrumb = stage_service.get_breadcrumb(data.stage_id)
+        
+        logger.info(f"Successfully updated stage for {user_id} to {stage.name} ({data.stage_id})")
+        
+        return {
+            "message": f"Stage updated to {stage.name}",
+            "stage_id": data.stage_id,
+            "stage_name": stage.name,
+            "breadcrumb": breadcrumb
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions (they're intentional)
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting stage for {user_id}: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to select stage: {str(e)}"
+        )
 
 
 @router.get("/my-stage", response_model=dict)
