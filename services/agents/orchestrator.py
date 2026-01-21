@@ -13,22 +13,43 @@ from datetime import datetime
 
 from services.agents.base_agent import BaseAgent
 from services.agents.intent_agent import IntentAgent
-from services.agents.stage_agent import StageAgent
+from services.agents.stage_agent_v2 import StageAgentV2
 from services.agents.retrieval_agent import RetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
+from services.patient_profile_service import get_patient_profile_service
 from models.schemas import (
     PipelineContext,
     PipelineResponse,
     AgentTrace,
     AgentStatus,
+    StageResult,
     create_pipeline_context
 )
-from config.pipeline_config import IntentCategory, SPEC_VERSION
+from config.pipeline_config import IntentCategory, PatientStage, CertaintyLevel, SPEC_VERSION
 from config.settings import settings
 from services.metrics import record_latency, record_count
 
 logger = logging.getLogger(__name__)
+
+
+# Stage-sensitive intents that benefit from personalization
+STAGE_SENSITIVE_INTENTS = [
+    IntentCategory.SURGERY_PROCEDURES,
+    IntentCategory.SIDE_EFFECTS,
+    IntentCategory.MEDICATION_INFO,
+    IntentCategory.POST_SURGERY_RECOVERY,
+    IntentCategory.CANCER_TREATMENT,
+    IntentCategory.EMOTIONAL_SUPPORT,
+    IntentCategory.STATISTICS,
+]
+
+# Sign-in suggestion message (Option C - in-response)
+SIGN_IN_SUGGESTION = (
+    "\n\n---\n"
+    "*💡 For more personalized guidance based on your treatment stage, "
+    "[sign in to your account](/login).*"
+)
 
 
 class PipelineOrchestrator:
@@ -74,7 +95,7 @@ class PipelineOrchestrator:
     def __init__(self, enable_llm_validation: bool = True):  # LLM validation ON by default (uses Haiku)
         # Initialize reusable agents
         self.intent_agent = IntentAgent()
-        self.stage_agent = StageAgent()
+        self.stage_agent = StageAgentV2()
         self.retrieval_agent = RetrievalAgent()
         self.validator_agent = ValidatorAgent(use_llm_validation=enable_llm_validation)
         # Reasoning agents are created on-demand via factory
@@ -86,6 +107,8 @@ class PipelineOrchestrator:
         self,
         message: str,
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        is_guest: bool = True,
         conversation_history: Optional[List[dict]] = None,
         include_trace: bool = False
     ) -> PipelineResponse:
@@ -95,6 +118,8 @@ class PipelineOrchestrator:
         Args:
             message: User's question/message
             session_id: Optional session ID for tracking
+            user_id: Firebase UID if authenticated (None for guests)
+            is_guest: Whether user is a guest (no profile features)
             conversation_history: Previous conversation messages
             include_trace: Whether to include debug trace in response
             
@@ -125,13 +150,193 @@ class PipelineOrchestrator:
         
         try:
             # ============================================
-            # PHASE 1: Classification (PARALLEL)
+            # PHASE 0: Load Profile (if authenticated)
+            # ============================================
+            needs_onboarding = False
+            profile = None
+            
+            if user_id and not is_guest:
+                # Authenticated user - load profile for stage
+                profile_service = get_patient_profile_service()
+                profile = await profile_service.get_profile(user_id)
+                
+                if profile and profile.onboarding_completed:
+                    # Use user-provided stage (HIGH certainty)
+                    ctx.stage_result = StageResult(
+                        stage=profile.current_stage,
+                        certainty=CertaintyLevel.HIGH,
+                        certainty_score=1.0,
+                        signals=["User-provided via onboarding"]
+                    )
+                    logger.info(f"Loaded stage from profile: {profile.current_stage}")
+                else:
+                    # Authenticated but no profile - prompt for onboarding
+                    ctx.stage_result = StageResult(
+                        stage=PatientStage.UNKNOWN,
+                        certainty=CertaintyLevel.LOW,
+                        certainty_score=0.0,
+                        signals=["Onboarding not completed"]
+                    )
+                    needs_onboarding = True
+                    logger.info(f"User {user_id} needs onboarding")
+            else:
+                # Guest user - using UNKNOWN stage
+                ctx.stage_result = StageResult(
+                    stage=PatientStage.UNKNOWN,
+                    certainty=CertaintyLevel.LOW,
+                    certainty_score=0.0,
+                    signals=["Guest user"]
+                )
+                logger.debug("Guest user - using UNKNOWN stage")
+            
+            # ============================================
+            # PHASE 1: Classification (Parallel)
+            # Intent + Stage (Inferred)
             # ============================================
             ctx = await self._run_classification_phase(ctx)
             
+            # ============================================
+            # PHASE 1.5: Pathway Proposals (Chat-Based)
+            # ============================================
+            modification_proposal = None
+            stage_update_message = None
+            
+            if user_id and not is_guest and profile:
+                inferred = ctx.stage_result
+                inferred_stage_id = ctx.metadata.get("granular_stage_id")
+                
+                # Check for High Certainty Mismatch
+                if (inferred and inferred.stage != PatientStage.UNKNOWN and 
+                    inferred.stage != profile.current_stage and 
+                    inferred.certainty == CertaintyLevel.HIGH):
+                    
+                    # 1. Loop Prevention: Did we just ask about this?
+                    # Check last system message in history
+                    last_was_proposal = False
+                    if conversation_history:
+                        last_msg = conversation_history[-1]
+                        if last_msg.get("role") == "assistant" and "Is that correct?" in last_msg.get("content", ""):
+                            last_was_proposal = True
+                    
+                    # 2. Logic
+                    if last_was_proposal:
+                        # We asked -> User responded.
+                        # Check if response is positive confirmation
+                        # Allow "yes" at the beginning of longer messages like "yes, I am asking about..."
+                        clean_msg = message.strip().lower()
+                        confirmation_words = ['yes', 'yeah', 'yep', 'correct', 'that\'s right', 'sure', 'right']
+                        is_confirmation = any(clean_msg.startswith(word) for word in confirmation_words)
+                        
+                        if is_confirmation:
+                            # EXECUTE UPDATE
+                            logger.info(f"User confirmed stage change to {inferred.stage}. Updating profile.")
+                            profile_service = get_patient_profile_service()
+                            
+                            # Use granular ID if available, else broad
+                            target_id = inferred_stage_id if inferred_stage_id else "0" # Fallback? 
+                            # If inferred.stage is broad enum, we can't map back easily without granular ID.
+                            # StageAgentV2 metadata has granular_id.
+                            
+                            if inferred_stage_id:
+                                # Map broad stage enum to user-friendly display name
+                                # This matches what users see on the onboarding page
+                                stage_display_names = {
+                                    PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
+                                    PatientStage.AWAITING_RESULTS: "Awaiting Results",
+                                    PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
+                                    PatientStage.ACTIVE_TREATMENT: "Active Treatment",
+                                    PatientStage.POST_TREATMENT: "Post-Treatment",
+                                    PatientStage.SURVEILLANCE: "Surveillance",
+                                    PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
+                                    PatientStage.UNKNOWN: "Unknown"
+                                }
+                                friendly_name = stage_display_names.get(inferred.stage, str(inferred.stage))
+                                
+                                # Update BOTH fields in database to prevent repeated prompts
+                                # 1. Update broad stage (current_stage) - this is what users see
+                                await profile_service.update_stage(user_id, inferred.stage)
+                                
+                                # 2. Update detailed stage (detailed_stage_id) - for internal granular tracking and RAG
+                                await profile_service.update_stage_detailed(user_id, inferred_stage_id)
+                                
+                                stage_update_message = f"Thanks, I've updated your stage to **{friendly_name}**."
+                                logger.info(f"Setting stage_update_message: {stage_update_message}")
+                                
+                                # To preserve context, use the PREVIOUS user message for RAG
+                                # Extract the last user message from conversation history (before "yes")
+                                if conversation_history and len(conversation_history) >= 2:
+                                    # Find the last user message before the current one
+                                    for i in range(len(conversation_history) - 1, -1, -1):
+                                        if conversation_history[i].get("role") == "user":
+                                            original_question = conversation_history[i].get("content", "")
+                                            if original_question and original_question.strip().lower() not in confirmation_words:
+                                                logger.info(f"Using original question for context: {original_question}")
+                                                # Update the context to use the original question
+                                                ctx = PipelineContext(
+                                                    request_id=ctx.request_id,
+                                                    user_message=original_question,
+                                                    conversation_history=conversation_history,
+                                                    session_id=ctx.session_id,
+                                                    user_id=ctx.user_id,
+                                                    metadata=ctx.metadata
+                                                )
+                                                # Re-run classification with the original question
+                                                ctx = await self._run_classification_phase(ctx)
+                                                break
+                                
+                                # Continue processing strictly with NEW stage (which is already in ctx)
+                            else:
+                                logger.warning("Granular ID missing for update")
+                                # Skip update if no ID
+                        else:
+                            # User ignored or negated.
+                            # REVERT to Profile Stage to respect user choice.
+                            logger.info("User ignored/negated stage proposal. Reverting context to Profile Stage.")
+                            ctx.stage_result = StageResult(
+                                stage=profile.current_stage,
+                                certainty=CertaintyLevel.HIGH,
+                                certainty_score=1.0,
+                                signals=["User ignored proposal"]
+                            )
+                            # Do NOT ask again.
+                    else:
+                        # We haven't asked yet.
+                        # STOP PIPELINE. Ask Confirmation.
+                        # Use broad category display name (matches onboarding page)
+                        stage_display_names = {
+                            PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
+                            PatientStage.AWAITING_RESULTS: "Awaiting Results",
+                            PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
+                            PatientStage.ACTIVE_TREATMENT: "Active Treatment",
+                            PatientStage.POST_TREATMENT: "Post-Treatment",
+                            PatientStage.SURVEILLANCE: "Surveillance",
+                            PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
+                            PatientStage.UNKNOWN: "Unknown"
+                        }
+                        proposed_name = stage_display_names.get(inferred.stage, str(inferred.stage))
+                        
+                        logger.info(f"Proposing stage change: {profile.current_stage} -> {proposed_name}")
+                        
+                        # Return clarifications-style response
+                        total_latency = int((time.time() - start_time) * 1000)
+                        return PipelineResponse(
+                            request_id=ctx.request_id,
+                            response=f"It sounds like you might be in the **{proposed_name}** stage based on what you said. Is that correct?",
+                            intent=ctx.intent_result.intent,
+                            stage=ctx.stage_result.stage,
+                            citations=[],
+                            confidence=1.0, # High confidence in question
+                            abstained=False, # We are engaging
+                            disclaimer_included=False,
+                            trace=self._traces if include_trace else [],
+                            total_latency_ms=total_latency,
+                            needs_onboarding=needs_onboarding,
+                            sign_in_suggestion=None
+                        )
+            
             # Check for early abort (e.g., clarification needed)
             if ctx.should_abort:
-                return self._create_clarification_response(ctx, start_time)
+                return self._create_clarification_response(ctx, start_time, stage_update_message)
             
             # ============================================
             # PHASE 2: Retrieval
@@ -148,12 +353,57 @@ class PipelineOrchestrator:
             # ============================================
             ctx = await self._run_validation_phase(ctx)
             
-            # Build final response
-            return self._build_response(ctx, start_time, include_trace)
+            # Prepend update message if any
+            response = self._build_response(
+                ctx, start_time, include_trace, 
+                needs_onboarding=needs_onboarding,
+                is_guest=is_guest,
+                modification_proposal=None # No longer using cards
+            )
+            
+            if stage_update_message:
+                logger.info(f"Prepending stage_update_message to response: {stage_update_message}")
+                response.response = stage_update_message + "\n\n" + response.response
+            else:
+                logger.info("No stage_update_message to prepend")
+                
+            return response
             
         except Exception as e:
             logger.error(f"Pipeline error: {e}")
             return self._create_error_response(ctx, str(e), start_time)
+    
+    async def _run_intent_phase(
+        self,
+        ctx: PipelineContext
+    ) -> PipelineContext:
+        """Run intent classification only (stage comes from profile)."""
+        logger.info("Phase 1: Running intent classification...")
+        
+        ctx, intent_trace = await self.intent_agent.run(ctx)
+        self._traces.append(intent_trace)
+        
+        self._log_step(
+            step_name="intent_classification",
+            agent_name="intent_agent",
+            input_summary="",
+            output_summary=f"intent={ctx.intent_result.intent}, stage={ctx.stage_result.stage}",
+            latency_ms=intent_trace.latency_ms,
+            model_used=None,
+            safety_flags=[],
+        )
+        
+        logger.info(
+            f"Intent classified: {ctx.intent_result.intent}, "
+            f"Stage (from profile): {ctx.stage_result.stage}"
+        )
+        
+        # Check if clarification is needed
+        if ctx.intent_result and ctx.intent_result.clarification_needed:
+            ctx.should_abort = True
+            ctx.abort_reason = "Clarification needed"
+        
+        return ctx
     
     async def _run_classification_phase(
         self,
@@ -164,6 +414,7 @@ class PipelineOrchestrator:
         
         # Create tasks for parallel execution
         intent_task = asyncio.create_task(self.intent_agent.run(ctx))
+        # Pass intent=None as they are parallel; StageAgentV2 handles this
         stage_task = asyncio.create_task(self.stage_agent.run(ctx))
         
         # Wait for both to complete
@@ -171,9 +422,26 @@ class PipelineOrchestrator:
             intent_task, stage_task
         )
         
-        # Merge results into context
+        # Merge results into main context
+        # Note: ctx objects are copies or same ref? usually copies in async if not careful, 
+        # but here 'run' returns (updated_ctx, trace).
+        
         ctx.intent_result = ctx_intent.intent_result
+        # Logic to prioritize Profile Stage vs Inferred Stage?
+        # Spec 7.5 says "Stage inferred per request".
+        # But for 'Context' passed to Reasoning Agent, we might prefer the Profile if it exists.
+        # However, StageAgentV2 is the authority on "Where does the user appear to be NOW".
+        # We will store the INFERRED result in stage_result as per spec.
+        # If we want to keep Profile stage, we should have stored it elsewhere or make a decision here.
+        
+        # Currently, Phase 0 loaded Profile Stage. Phase 1 (StageAgent) overwrites it.
+        # This is correct for "Session Context" adaptation (e.g. user says "I just had surgery" but profile says "Pre-op" -> we should answer as if they had surgery).
+        # AND we trigger a proposal.
+        
         ctx.stage_result = ctx_stage.stage_result
+        # Merge metadata (granular id)
+        if ctx_stage.metadata.get("granular_stage_id"):
+            ctx.metadata["granular_stage_id"] = ctx_stage.metadata["granular_stage_id"]
         
         # Store traces
         self._traces.extend([intent_trace, stage_trace])
@@ -287,7 +555,10 @@ class PipelineOrchestrator:
         self,
         ctx: PipelineContext,
         start_time: float,
-        include_trace: bool
+        include_trace: bool,
+        needs_onboarding: bool = False,
+        is_guest: bool = True,
+        modification_proposal: Optional['ModificationProposal'] = None
     ) -> PipelineResponse:
         """Build the final pipeline response."""
         total_latency = int((time.time() - start_time) * 1000)
@@ -310,7 +581,10 @@ class PipelineOrchestrator:
             abstained=ctx.reasoning_result.abstained if ctx.reasoning_result else True,
             disclaimer_included=True,  # We always add disclaimers for medical content
             trace=self._traces if include_trace else [],
-            total_latency_ms=total_latency
+            total_latency_ms=total_latency,
+            needs_onboarding=needs_onboarding,
+            sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest),
+            modification_proposal=modification_proposal
         )
         # Emit metrics
         record_latency(
@@ -343,7 +617,8 @@ class PipelineOrchestrator:
     def _create_clarification_response(
         self,
         ctx: PipelineContext,
-        start_time: float
+        start_time: float,
+        stage_update_message: Optional[str] = None
     ) -> PipelineResponse:
         """Create a response requesting clarification."""
         total_latency = int((time.time() - start_time) * 1000)
@@ -353,6 +628,11 @@ class PipelineOrchestrator:
             if ctx.intent_result and ctx.intent_result.suggested_clarification
             else "Could you please tell me more about what you'd like to know?"
         )
+        
+        # Prepend stage update message if present
+        if stage_update_message:
+            logger.info(f"Prepending stage_update_message to clarification: {stage_update_message}")
+            clarification_text = stage_update_message + "\n\n" + clarification_text
         
         return PipelineResponse(
             request_id=ctx.request_id,
@@ -391,6 +671,31 @@ class PipelineOrchestrator:
             trace=self._traces,
             total_latency_ms=total_latency
         )
+
+    def _get_sign_in_suggestion(
+        self,
+        ctx: PipelineContext,
+        is_guest: bool
+    ) -> Optional[str]:
+        """
+        Get sign-in suggestion for guest users on stage-sensitive queries.
+        
+        Returns the suggestion message if:
+        - User is a guest
+        - Query intent is stage-sensitive (medical/treatment related)
+        
+        Option C: Response-integrated sign-in suggestion
+        """
+        if not is_guest:
+            return None
+        
+        # Check if intent is stage-sensitive
+        intent = ctx.intent_result.intent if ctx.intent_result else IntentCategory.UNKNOWN
+        
+        if intent in STAGE_SENSITIVE_INTENTS:
+            return SIGN_IN_SUGGESTION
+        
+        return None
 
     def _log_step(
         self,

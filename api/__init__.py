@@ -20,6 +20,7 @@ from .routes import (
     health_v2_router,
     debug_router
 )
+from .profile_routes import router as profile_router
 
 __all__ = [
     # v1 (deprecated)
@@ -31,6 +32,6 @@ __all__ = [
     # v2 (new)
     'pipeline_router',
     'health_v2_router',
-    'debug_router'
+    'debug_router',
+    'profile_router',
 ]
-

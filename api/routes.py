@@ -71,18 +71,18 @@ async def chat_v2(
     Chat with the AI companion using the multi-agent pipeline (v2).
     
     This endpoint uses a sophisticated multi-agent system that:
-    1. **Intent Extraction**: Classifies query into 18 medical categories
-    2. **Stage Identification**: Infers patient's medical journey stage
+    1. **Profile Loading**: Loads patient stage from profile (if authenticated)
+    2. **Intent Extraction**: Classifies query into 18 medical categories
     3. **Knowledge Retrieval**: Fetches relevant evidence from appropriate KB
     4. **Specialized Reasoning**: Generates stage-aware, empathetic responses
     5. **Safety Validation**: Ensures responses are safe and compliant
     
     Features over v1:
+    - Personalized responses based on user-provided stage
     - More accurate intent classification (18 categories vs 9)
-    - Stage-aware responses tailored to patient journey
     - Better evidence retrieval with intent-based KB routing
     - Built-in safety guardrails
-    - Detailed execution traces for debugging
+    - Sign-in prompts for guest users on stage-sensitive queries
     
     Headers:
     - Authorization: Bearer <token> for authenticated users
@@ -94,16 +94,18 @@ async def chat_v2(
     start_time = time.time()
     
     try:
-        # Extract user_id from headers
-        user_id = _extract_user_id(raw_request, authorization, x_user_id, request)
+        # Extract user identity from headers
+        user_id, is_guest = _extract_user_identity(authorization, x_user_id)
         
         # Get orchestrator
         orchestrator = get_orchestrator()
         
-        # Process through pipeline (orchestrator creates its own context)
+        # Process through pipeline with user identity for profile loading
         response = await orchestrator.process(
             message=request.message,
             session_id=request.session_id,
+            user_id=user_id,
+            is_guest=is_guest,
             conversation_history=request.conversation_history,
             include_trace=include_trace or request.include_trace
         )
@@ -116,7 +118,7 @@ async def chat_v2(
         await _log_conversation(
             request=request,
             response=response,
-            user_id=user_id,
+            user_id=user_id or "anonymous",
             latency_ms=total_latency
         )
         
@@ -127,7 +129,8 @@ async def chat_v2(
         logger.info(
             f"Pipeline completed: intent={response.intent}, "
             f"stage={response.stage}, latency={total_latency}ms, "
-            f"abstained={response.abstained}"
+            f"abstained={response.abstained}, is_guest={is_guest}, "
+            f"needs_onboarding={response.needs_onboarding}"
         )
         
         return response
@@ -337,7 +340,7 @@ async def analyze_query(
     Returns intent, stage, and retrieval info without full reasoning.
     """
     try:
-        from services.agents import IntentAgent, StageAgent
+        from services.agents import IntentAgent
         import asyncio
         
         # Create context
@@ -348,29 +351,25 @@ async def analyze_query(
         )
         
         intent_agent = IntentAgent()
-        stage_agent = StageAgent()
+        # StageAgent removed - stage comes from profile, not LLM inference
         
-        # Run in parallel using the agent's run() method
-        results = await asyncio.gather(
-            intent_agent.run(context),
-            stage_agent.run(context),
-            return_exceptions=True
-        )
+        # Run intent agent
+        intent_result = await intent_agent.run(context)
         
         analysis = {
             "request_id": context.request_id,
             "message": request.message,
             "timestamp": datetime.utcnow().isoformat(),
             "intent": None,
-            "stage": None,
+            "stage": "from_profile",  # Stage now comes from user profile
             "errors": []
         }
         
         # Process intent result
-        if isinstance(results[0], Exception):
-            analysis["errors"].append(f"Intent error: {str(results[0])}")
+        if isinstance(intent_result, Exception):
+            analysis["errors"].append(f"Intent error: {str(intent_result)}")
         else:
-            intent_ctx, intent_trace = results[0]
+            intent_ctx, intent_trace = intent_result
             if intent_ctx.intent_result:
                 analysis["intent"] = {
                     "category": intent_ctx.intent_result.intent.value if hasattr(intent_ctx.intent_result.intent, 'value') else str(intent_ctx.intent_result.intent),
@@ -378,20 +377,6 @@ async def analyze_query(
                     "reasoning": intent_ctx.intent_result.reasoning,
                     "clarification_needed": intent_ctx.intent_result.clarification_needed,
                     "latency_ms": intent_trace.latency_ms
-                }
-        
-        # Process stage result
-        if isinstance(results[1], Exception):
-            analysis["errors"].append(f"Stage error: {str(results[1])}")
-        else:
-            stage_ctx, stage_trace = results[1]
-            if stage_ctx.stage_result:
-                analysis["stage"] = {
-                    "stage": stage_ctx.stage_result.stage.value if hasattr(stage_ctx.stage_result.stage, 'value') else str(stage_ctx.stage_result.stage),
-                    "certainty": stage_ctx.stage_result.certainty.value if hasattr(stage_ctx.stage_result.certainty, 'value') else str(stage_ctx.stage_result.certainty),
-                    "certainty_score": stage_ctx.stage_result.certainty_score,
-                    "signals": stage_ctx.stage_result.signals,
-                    "latency_ms": stage_trace.latency_ms
                 }
         
         return analysis
@@ -448,13 +433,55 @@ async def get_intent_routing(intent: str):
 # Helper Functions
 # ================================
 
+from typing import Tuple
+
+def _extract_user_identity(
+    authorization: Optional[str],
+    x_user_id: Optional[str]
+) -> Tuple[Optional[str], bool]:
+    """
+    Extract user identity from request headers.
+    
+    Returns:
+        (user_id, is_guest) tuple:
+        - For authenticated users: (firebase_uid, False)
+        - For guest users: (None, True)
+    """
+    logger.info(f"_extract_user_identity called: auth={authorization[:50] if authorization else None}...")
+    
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            import jwt
+            token = authorization.replace("Bearer ", "")
+            logger.info(f"Attempting to decode JWT token (len={len(token)})")
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
+            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+            logger.info(f"Extracted user_id: {user_id}")
+            if user_id:
+                logger.info(f"Authenticated user from JWT: {user_id}")
+                return (user_id, False)
+            else:
+                logger.warning(f"No user_id found in JWT claims: {decoded}")
+        except Exception as jwt_error:
+            logger.warning(f"Could not decode JWT: {jwt_error}")
+    else:
+        logger.info(f"No valid Bearer token found (auth={authorization})")
+    
+    # Guest user (X-User-ID is for session tracking, not profile)
+    if x_user_id:
+        logger.debug(f"Guest user with session ID: {x_user_id}")
+    
+    return (None, True)
+
+
 def _extract_user_id(
     raw_request: FastAPIRequest,
     authorization: Optional[str],
     x_user_id: Optional[str],
     request: PipelineRequest
 ) -> str:
-    """Extract user ID from request headers."""
+    """Extract user ID from request headers (legacy - for logging)."""
     if authorization and authorization.startswith("Bearer "):
         try:
             import jwt
@@ -471,6 +498,7 @@ def _extract_user_id(
         return x_user_id
     else:
         return "anonymous"
+
 
 
 async def _log_conversation(
