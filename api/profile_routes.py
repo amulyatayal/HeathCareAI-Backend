@@ -341,20 +341,12 @@ async def select_treatment_stage(
         
         # Update user profile with selected stage
         profile_service = get_patient_profile_service()
-        profile = await profile_service.get_profile(user_id)
         
-        if not profile:
-            # Create profile if it doesn't exist (for guest users)
-            from models.patient_profile import PatientProfile
-            profile = PatientProfile(
-                user_id=user_id,
-                current_stage="unknown",
-                onboarding_completed=False
-            )
+        # Get or create profile (handles both OAuth and guest users)
+        profile = await profile_service.get_or_create_profile(user_id)
         
-        # Update the detailed stage
-        profile.detailed_stage_id = data.stage_id
-        await profile_service.save_profile(profile)
+        # Update the detailed stage using existing service method
+        await profile_service.update_stage_detailed(user_id, data.stage_id)
         
         # Get breadcrumb for response
         breadcrumb = stage_service.get_breadcrumb(data.stage_id)
