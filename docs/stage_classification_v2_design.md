@@ -68,19 +68,7 @@ The `Orchestrator` inspects the **Conversation History** (specifically the last 
 **Case C: User Ignores/Negates ("What is the weather?", "No")**
 ...
 ...
-## 11. Incremental Fixes & Refinements (Post-V2 Launch)
 
-### 11.1 Broad Category Display Mapping
-To align with the onboarding experience, the system now maps granular internal IDs (e.g., `2.1.2`) to high-level display names (e.g., "Active Treatment") in all user-facing confirmation and proposal messages.
-
-### 11.2 Flexible Confirmation Detection
-Confirmation detection now uses `message.startswith(word)` instead of exact string matching. This allows users to provide compound affirmations like *"yes, please tell me more about recovery"* without breaking the flow.
-
-### 11.3 Clarification Integration
-If a confirmation message (e.g., "yes") is too short to determine intent, the system triggers a clarification request. The stage update confirmation is now explicitly prepended to these clarification requests so the user knows their profile was updated successfully.
-
-### 11.4 Context Preservation (Original Question Carry-over)
-A major UX refinement: After a user says "yes" to a stage update, the system automatically retrieves the message sent *before* the "yes" and uses it as the query for the RAG pipeline. This prevents "context loss" where the bot would otherwise forget what the user was originally asking about.
 
 ## 4. Guest vs. Authenticated Users
 
@@ -161,7 +149,21 @@ The `ReasoningAgent` (which generates the final medical answer) relies on `Patie
 2. User confirmation ("Yes") → Profile update
 3. User negation/ignore → Skip update
 
-## 10. Future Improvements
+## 11. Incremental Fixes & Refinements (Post-V2 implementation)
+
+### 11.1 Broad Category Display Mapping
+To align with the onboarding experience, the system now maps granular internal IDs (e.g., `2.1.2`) to high-level display names (e.g., "Active Treatment") in all user-facing confirmation and proposal messages.
+
+### 11.2 Flexible Confirmation Detection
+Confirmation detection now uses `message.startswith(word)` instead of exact string matching. This allows users to provide compound affirmations like *"yes, please tell me more about recovery"* without breaking the flow.
+
+### 11.3 Clarification Integration
+If a confirmation message (e.g., "yes") is too short to determine intent, the system triggers a clarification request. The stage update confirmation is now explicitly prepended to these clarification requests so the user knows their profile was updated successfully.
+
+### 11.4 Context Preservation (Original Question Carry-over)
+A major UX refinement: After a user says "yes" to a stage update, the system automatically retrieves the message sent *before* the "yes" and uses it as the query for the RAG pipeline. This prevents "context loss" where the bot would otherwise forget what the user was originally asking about.
+
+## 12. Future Improvements
 - **Multi-Turn Persuasion**: If a user consistently mentions symptoms of a different stage but ignores prompts, gently resurface the suggestion after N turns.
 - **Guest-to-Auth Upgrade**: If a Guest confirms a stage (implicitly), prompt them to "Sign Up to save this info".
 - **Granular Sub-Stage Detection**: Improve `StageAgentV2` prompt to distinguish between very similar sub-stages (e.g., "Lumpectomy" vs "Mastectomy") with higher precision using detailed definitions.
