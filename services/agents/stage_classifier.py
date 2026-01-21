@@ -65,6 +65,8 @@ class StageClassifierAgent:
             search_terms = getattr(stage, 'search_terms', [])
             if search_terms:
                 stage_text += f" Keywords: {', '.join(search_terms)}"
+            
+            logger.info(f"Computing embedding for {stage_id}: '{stage_text}'")
                 
             embedding = self.embedding_service.create_embedding(stage_text)
             if embedding:

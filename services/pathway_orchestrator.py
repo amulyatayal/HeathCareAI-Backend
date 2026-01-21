@@ -61,12 +61,15 @@ class PathwayOrchestrator:
         # 1. Get Current Profile
         profile = await self.profile_service.get_profile(patient_id)
         if not profile:
+             logger.warning(f"PathwayOrchestrator: No profile found for {patient_id}")
              return StageUpdateResult(
                 update_type=StageUpdateType.VALIDATION_ERROR,
                 error="Patient profile not found"
              )
              
         current_stage_id = profile.detailed_stage_id
+        logger.info(f"PathwayOrchestrator: patient={patient_id}, current_stage={current_stage_id}, text='{user_text[:50]}...'")
+
         
         # 2. Handle Explicit Override
         if explicit_stage_id:
@@ -146,7 +149,7 @@ class PathwayOrchestrator:
                     g_stage, g_score = global_results[0]
                     logger.info(f"Global search top: {g_stage.stage_id} ({g_stage.name}) score={g_score}")
                     
-                    if g_score > 0.45 and g_stage.stage_id != current_stage_id:
+                    if g_score > 0.25 and g_stage.stage_id != current_stage_id:
                         logger.info(f"Proposing GLOBAL stage change for {patient_id}: {current_stage_id} -> {g_stage.stage_id} (Score: {g_score})")
                         return StageUpdateResult(
                             update_type=StageUpdateType.PROPOSAL,

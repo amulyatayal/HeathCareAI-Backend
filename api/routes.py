@@ -340,7 +340,7 @@ async def analyze_query(
     Returns intent, stage, and retrieval info without full reasoning.
     """
     try:
-        from services.agents import IntentAgent, StageAgent
+        from services.agents import IntentAgent
         import asyncio
         
         # Create context
@@ -351,29 +351,25 @@ async def analyze_query(
         )
         
         intent_agent = IntentAgent()
-        stage_agent = StageAgent()
+        # StageAgent removed - stage comes from profile, not LLM inference
         
-        # Run in parallel using the agent's run() method
-        results = await asyncio.gather(
-            intent_agent.run(context),
-            stage_agent.run(context),
-            return_exceptions=True
-        )
+        # Run intent agent
+        intent_result = await intent_agent.run(context)
         
         analysis = {
             "request_id": context.request_id,
             "message": request.message,
             "timestamp": datetime.utcnow().isoformat(),
             "intent": None,
-            "stage": None,
+            "stage": "from_profile",  # Stage now comes from user profile
             "errors": []
         }
         
         # Process intent result
-        if isinstance(results[0], Exception):
-            analysis["errors"].append(f"Intent error: {str(results[0])}")
+        if isinstance(intent_result, Exception):
+            analysis["errors"].append(f"Intent error: {str(intent_result)}")
         else:
-            intent_ctx, intent_trace = results[0]
+            intent_ctx, intent_trace = intent_result
             if intent_ctx.intent_result:
                 analysis["intent"] = {
                     "category": intent_ctx.intent_result.intent.value if hasattr(intent_ctx.intent_result.intent, 'value') else str(intent_ctx.intent_result.intent),
@@ -381,20 +377,6 @@ async def analyze_query(
                     "reasoning": intent_ctx.intent_result.reasoning,
                     "clarification_needed": intent_ctx.intent_result.clarification_needed,
                     "latency_ms": intent_trace.latency_ms
-                }
-        
-        # Process stage result
-        if isinstance(results[1], Exception):
-            analysis["errors"].append(f"Stage error: {str(results[1])}")
-        else:
-            stage_ctx, stage_trace = results[1]
-            if stage_ctx.stage_result:
-                analysis["stage"] = {
-                    "stage": stage_ctx.stage_result.stage.value if hasattr(stage_ctx.stage_result.stage, 'value') else str(stage_ctx.stage_result.stage),
-                    "certainty": stage_ctx.stage_result.certainty.value if hasattr(stage_ctx.stage_result.certainty, 'value') else str(stage_ctx.stage_result.certainty),
-                    "certainty_score": stage_ctx.stage_result.certainty_score,
-                    "signals": stage_ctx.stage_result.signals,
-                    "latency_ms": stage_trace.latency_ms
                 }
         
         return analysis

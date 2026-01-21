@@ -60,6 +60,15 @@ class TreatmentStage(BaseModel):
         default=True,
         description="Whether to show this stage to patients"
     )
+    # NEW: Added for embedding enrichment and user-friendly display
+    display_name: Optional[str] = Field(
+        None,
+        description="User-friendly display name (e.g., 'Full Breast Removal')"
+    )
+    search_terms: List[str] = Field(
+        default_factory=list,
+        description="Patient-friendly search terms for better embedding matching"
+    )
 
 
 class StageTreeNode(BaseModel):

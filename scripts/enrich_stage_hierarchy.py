@@ -52,7 +52,7 @@ SEARCH_TERMS = {
     "Results Clinic": ["got my diagnosis", "found out I have cancer", "just diagnosed", "hearing the news"],
     "palliative": ["incurable", "comfort care", "quality of life", "managing symptoms"],
     "primary endocrine": ["hormone pills", "taking tablets", "hormone blocker"],
-    "Breast surgery": ["having surgery", "going for operation", "surgery date", "had my operation"],
+    "Breast surgery": ["having surgery", "going for operation", "surgery date", "had my operation", "had surgery", "finished surgery", "surgery done"],
     "Breast conservation": ["lumpectomy", "partial removal", "keeping my breast"],
     "Mastectomy": ["breast removed", "mastectomy", "lost my breast", "took the whole breast"],
     "radiotherapy": ["radiation", "radiotherapy", "zapping", "radio treatment", "getting zapped"],

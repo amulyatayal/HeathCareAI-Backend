@@ -229,7 +229,10 @@
         "having surgery",
         "going for operation",
         "surgery date",
-        "had my operation"
+        "had my operation",
+        "had surgery",
+        "finished surgery",
+        "surgery done"
       ]
     },
     "2.1.1": {

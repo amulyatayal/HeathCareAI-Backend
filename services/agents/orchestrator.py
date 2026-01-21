@@ -13,7 +13,7 @@ from datetime import datetime
 
 from services.agents.base_agent import BaseAgent
 from services.agents.intent_agent import IntentAgent
-from services.agents.stage_agent import StageAgent
+# StageAgent removed - stage now comes from user profile, not LLM inference
 from services.agents.retrieval_agent import RetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
@@ -95,7 +95,7 @@ class PipelineOrchestrator:
     def __init__(self, enable_llm_validation: bool = True):  # LLM validation ON by default (uses Haiku)
         # Initialize reusable agents
         self.intent_agent = IntentAgent()
-        self.stage_agent = StageAgent()
+        # StageAgent removed - stage comes from profile + StageClassifierAgent handles proposals
         self.retrieval_agent = RetrievalAgent()
         self.validator_agent = ValidatorAgent(use_llm_validation=enable_llm_validation)
         # Reasoning agents are created on-demand via factory
@@ -194,6 +194,7 @@ class PipelineOrchestrator:
             # ============================================
             modification_proposal = None
             if user_id and not is_guest:
+                logger.info(f"[PHASE 0.5] Calling PathwayOrchestrator for user={user_id}")
                 try:
                     from services.pathway_orchestrator import PathwayOrchestrator, StageUpdateType
                     # Use a fresh orchestrator instance
