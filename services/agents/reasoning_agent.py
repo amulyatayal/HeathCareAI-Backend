@@ -10,8 +10,9 @@ from typing import Optional, Dict, Any
 
 from services.agents.base_agent import BaseAgent, AgentError
 from services.agents.retrieval_agent import format_chunks_for_prompt, get_citations_from_chunks
-from services.agents.stage_agent import get_stage_guidelines
-from services.patient_stage_service import get_patient_stage_service
+from services.agents.base_agent import BaseAgent
+from services.agents.retrieval_agent import RetrievalAgent
+from services.patient_stage_service import get_stage_guidelines
 from models.schemas import (
     PipelineContext,
     ReasoningResult,
@@ -324,39 +325,39 @@ class ReasoningAgent(BaseAgent):
             stage = context.stage_result.stage
             stage_certainty = context.stage_result.certainty
         
-        # Build stage context - using PathwayOrchestrator for rich context
+        # Build stage context
         stage_context = ""
         
-        # Check if detailed stage is available in context metadata
-        detailed_stage_id = None
-        if hasattr(context, 'metadata') and context.metadata:
-            detailed_stage_id = context.metadata.get('detailed_stage_id')
-        
-        # Try to use orchestrator for rich context
         try:
-             # Lazy import to avoid circular dependency
-            from services.pathway_orchestrator import PathwayOrchestrator
-            orchestrator = PathwayOrchestrator()
+             # Use PatientStageService for RAG context
+            from services.patient_stage_service import get_patient_stage_service
+            stage_service = get_patient_stage_service()
             
-            # If we have a user_id, get persistent context
-            if context.user_id:
-                stage_context = await orchestrator.get_rag_context(context.user_id)
+            target_stage_id = None
             
-            # If we have an explicit stage in metadata (e.g. from UI override), use that
-            elif detailed_stage_id:
-                stage_service = get_patient_stage_service()
-                stage = stage_service.get_stage(detailed_stage_id)
-                if stage:
-                    # Construct ephemeral context for this request
-                    p_ctx = []
-                    p_ctx.append(f"CURRENT STAGE: {stage.name}")
-                    p_ctx.append(f"Description: {stage.description}")
-                    if stage.transition_notes:
-                        p_ctx.append(f"Notes: {stage.transition_notes}")
-                    stage_context = "\n".join(p_ctx)
+            # 1. Prefer explicit override from metadata (e.g. detailed navigation)
+            if hasattr(context, 'metadata') and context.metadata and context.metadata.get('detailed_stage_id'):
+                target_stage_id = context.metadata.get('detailed_stage_id')
+                
+            # 2. Fallback to user profile if authenticated
+            elif context.user_id:
+                from services.patient_profile_service import get_patient_profile_service
+                profile_service = get_patient_profile_service()
+                # Async get_profile
+                profile = await profile_service.get_profile(context.user_id)
+                if profile:
+                    target_stage_id = profile.current_stage_id
+            
+            # 3. If we have a target ID, get the rich context
+            if target_stage_id:
+                stage_context = stage_service.get_rag_context(target_stage_id)
+            else:
+                # 4. Fallback to signal string if no specific stage ID
+                if context.stage_result and context.stage_result.signals:
+                    stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+                    
         except Exception as e:
-            logger.warning(f"Orchestrator context failed: {e}")
-            # Fallback to simple signal string
+            logger.warning(f"Stage context generation failed: {e}")
             if context.stage_result and context.stage_result.signals:
                 stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
         
@@ -366,7 +367,7 @@ class ReasoningAgent(BaseAgent):
         return REASONING_USER_TEMPLATE.format(
             question=context.user_message,
             stage=stage,
-            stage_certainty=certainty_str, # Fix: pass string not enum
+            stage_certainty=certainty_str,
             stage_context=stage_context
         )
     

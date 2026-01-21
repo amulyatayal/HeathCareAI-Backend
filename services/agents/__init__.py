@@ -5,7 +5,7 @@ Contains all agent implementations for the patient education system.
 
 from services.agents.base_agent import BaseAgent, AgentError
 from services.agents.intent_agent import IntentAgent
-from services.agents.stage_agent import get_stage_guidelines  # StageAgent removed
+from services.patient_stage_service import get_stage_guidelines  # Moved to PatientStageService
 from services.agents.retrieval_agent import (
     RetrievalAgent,
     format_chunks_for_prompt,

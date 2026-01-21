@@ -1,4 +1,18 @@
-# Patient Stage Classification - Design Document
+# Patient Stage Classification - Design Document (V1)
+
+> [!CAUTION]
+> **This document describes the V1 architecture which has been deprecated.**
+> 
+> **Current Version**: See [stage_classification_v2_design.md](stage_classification_v2_design.md)
+> 
+> **Migration Date**: 2026-01-20
+> 
+> **Key Changes in V2**:
+> - Embedding-based classifier replaced with LLM-based `StageAgentV2`
+> - Proposal cards replaced with natural language chat confirmation
+> - `PathwayOrchestrator` consolidated into `PipelineOrchestrator`
+
+---
 
 ## 1. Overview
 

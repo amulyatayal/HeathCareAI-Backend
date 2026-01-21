@@ -22,6 +22,7 @@ from models.patient_stages import (
     hash_email,
     extract_postal_area,
 )
+from config.pipeline_config import PatientStage
 
 logger = logging.getLogger(__name__)
 
@@ -366,7 +367,118 @@ class PatientStageService:
         if ctx["transition_notes"]:
             lines.append(f"- Transition context: {ctx['transition_notes']}")
         
-        return "\n".join(lines) + "\n"
+
+    def get_rag_context(self, stage_id: str) -> str:
+        """
+        Build the Past/Present/Future context for RAG injection based on a stage ID.
+        """
+        stage = self.get_stage_by_id(stage_id)
+        if not stage:
+            return "Patient Stage: Unknown ID"
+            
+        # Build Context
+        context = []
+        
+        # PRESENT
+        context.append(f"CURRENT STAGE: {stage.name} ({stage.stage_id})")
+        
+        # Add Journey (Breadcrumb)
+        breadcrumb = self.get_breadcrumb(stage_id)
+        if breadcrumb:
+             # Remove current stage from breadcrumb to avoid duplication if present, or just show full path
+             context.append(f"Journey: {' → '.join(breadcrumb)}")
+             
+        context.append(f"Description: {stage.description}")
+        if stage.transition_notes:
+            context.append(f"Notes: {stage.transition_notes}")
+            
+        # FUTURE (Next likely steps)
+        if stage.child_stage_ids:
+            next_names = [self.get_stage_by_id(sid).name for sid in stage.child_stage_ids if self.get_stage_by_id(sid)]
+            context.append(f"NEXT POSSIBLE STEPS (Drill-down): {', '.join(next_names)}")
+        elif stage.after_stages:
+            next_names = [self.get_stage_by_id(sid).name for sid in stage.after_stages if self.get_stage_by_id(sid)]
+            context.append(f"NEXT POSSIBLE STEPS (Progression): {', '.join(next_names)}")
+            
+        return "\n".join(context)
+
+    def map_to_high_level(self, stage_id: str) -> PatientStage:
+        """
+        Map a detailed stage ID (e.g., '1', '2.1.1') to a high-level PatientStage.
+        Using simple heuristics based on root ID.
+        """
+        if not stage_id:
+            return PatientStage.UNKNOWN
+            
+        root_id = stage_id.split('.')[0]
+        
+        mapping = {
+            "0": PatientStage.PRE_DIAGNOSIS,
+            "1": PatientStage.NEWLY_DIAGNOSED, # Results Clinic
+            "2": PatientStage.ACTIVE_TREATMENT, # Surgery
+            "3": PatientStage.ACTIVE_TREATMENT, # Chemo
+            "4": PatientStage.ACTIVE_TREATMENT, # Radio
+            "5": PatientStage.ACTIVE_TREATMENT, # Targeted
+            "6": PatientStage.ACTIVE_TREATMENT, # Hormone
+            "7": PatientStage.SURVEILLANCE,     # Follow Up
+            "8": PatientStage.PALLIATIVE_SUPPORT,
+            "9": PatientStage.PALLIATIVE_SUPPORT
+        }
+        
+
+# ================================
+# Stage-Aware Response Modifiers
+# ================================
+
+STAGE_RESPONSE_GUIDELINES = {
+    PatientStage.PRE_DIAGNOSIS: {
+        "tone": "reassuring but not dismissive",
+        "emphasis": "importance of getting checked, not jumping to conclusions",
+        "avoid": "assuming they have cancer, detailed treatment info"
+    },
+    PatientStage.AWAITING_RESULTS: {
+        "tone": "calm and supportive",
+        "emphasis": "managing anxiety, what to expect from results",
+        "avoid": "speculation about diagnosis, worst-case scenarios"
+    },
+    PatientStage.NEWLY_DIAGNOSED: {
+        "tone": "gentle and empathetic",
+        "emphasis": "it's okay to feel overwhelmed, take time to process",
+        "avoid": "information overload, statistics without context"
+    },
+    PatientStage.ACTIVE_TREATMENT: {
+        "tone": "practical and encouraging",
+        "emphasis": "managing side effects, day-to-day coping",
+        "avoid": "minimizing challenges, unrealistic expectations"
+    },
+    PatientStage.POST_TREATMENT: {
+        "tone": "celebratory but realistic",
+        "emphasis": "recovery milestones, adjusting to 'new normal'",
+        "avoid": "dismissing ongoing concerns, 'you should be grateful'"
+    },
+    PatientStage.SURVEILLANCE: {
+        "tone": "reassuring and informative",
+        "emphasis": "importance of follow-ups, living well long-term",
+        "avoid": "excessive focus on recurrence anxiety"
+    },
+    PatientStage.PALLIATIVE_SUPPORT: {
+        "tone": "compassionate and dignified",
+        "emphasis": "comfort, quality of life, support resources",
+        "avoid": "false hope, dismissing their experience"
+    },
+    PatientStage.UNKNOWN: {
+        "tone": "warm and open",
+        "emphasis": "general support, asking clarifying questions",
+        "avoid": "making assumptions about their situation"
+    }
+}
+
+def get_stage_guidelines(stage: PatientStage) -> dict:
+    """Get response guidelines for a specific patient stage."""
+    return STAGE_RESPONSE_GUIDELINES.get(
+        stage,
+        STAGE_RESPONSE_GUIDELINES[PatientStage.UNKNOWN]
+    )
 
 
 # ================================

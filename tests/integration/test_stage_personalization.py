@@ -1,6 +1,6 @@
-
 import unittest
 import logging
+import asyncio
 from unittest.mock import MagicMock, patch
 
 from services.agents.reasoning_agent import ReasoningAgent
@@ -29,6 +29,7 @@ class TestReasoningAgentStageIntegration(unittest.TestCase):
         """Set up for each test."""
         self.agent = ReasoningAgent(agent_type=ReasoningAgentType.GENERAL)
         
+
     def test_prompt_includes_detailed_stage_context_chemotherapy(self):
         """
         Verify that a context with detailed_stage_id '3.2' (Chemotherapy)
@@ -42,7 +43,7 @@ class TestReasoningAgentStageIntegration(unittest.TestCase):
         )
         
         # Build prompt
-        prompt = self.agent._build_user_prompt(context)
+        prompt = asyncio.run(self.agent._build_user_prompt(context))
         
         # Verify prompt content
         logger.info(f"Generated prompt for Chemotherapy:\n{prompt[:500]}...")
@@ -69,7 +70,7 @@ class TestReasoningAgentStageIntegration(unittest.TestCase):
             metadata={"detailed_stage_id": "2"}  # Surgery
         )
         
-        prompt = self.agent._build_user_prompt(context)
+        prompt = asyncio.run(self.agent._build_user_prompt(context))
         
         logger.info(f"Generated prompt for Surgery:\n{prompt[:500]}...")
         
@@ -88,7 +89,7 @@ class TestReasoningAgentStageIntegration(unittest.TestCase):
         
         # Should not raise exception
         try:
-            prompt = self.agent._build_user_prompt(context)
+            prompt = asyncio.run(self.agent._build_user_prompt(context))
             logger.info("Prompt generated successfully with invalid ID")
         except Exception as e:
             self.fail(f"Prompt generation failed with invalid stage ID: {e}")
