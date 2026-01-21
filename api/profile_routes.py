@@ -54,7 +54,32 @@ async def get_authenticated_user_id(request: Request) -> str:
     """
     auth_header = request.headers.get("Authorization")
     
-    # Check for guest user header - not allowed for profile
+    # Try to validate Authorization header FIRST (before rejecting guest users)
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        
+        try:
+            # Decode JWT to get user ID
+            # For production, use firebase_admin.auth.verify_id_token(token)
+            # For now, we'll decode without verification (frontend handles this)
+            from jwt import decode
+            decoded = decode(token, options={"verify_signature": False})
+            
+            # Try common JWT claims for user ID
+            user_id = (
+                decoded.get("sub") or 
+                decoded.get("user_id") or 
+                decoded.get("uid")
+            )
+            
+            if user_id:
+                return user_id  # Valid OAuth token found, return immediately
+                
+        except Exception as e:
+            logger.error(f"Token verification failed: {e}")
+            # Fall through to check for guest/no auth
+    
+    # ONLY reject guest users if no valid Authorization token was found above
     guest_id = request.headers.get("X-User-ID")
     if guest_id:
         raise HTTPException(
@@ -62,42 +87,11 @@ async def get_authenticated_user_id(request: Request) -> str:
             detail="Profile features require authentication. Please sign in."
         )
     
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required for profile features"
-        )
-    
-    token = auth_header[7:]
-    
-    try:
-        # Decode JWT to get user ID
-        # For production, use firebase_admin.auth.verify_id_token(token)
-        # For now, we'll decode without verification (frontend handles this)
-        from jwt import decode
-        decoded = decode(token, options={"verify_signature": False})
-        
-        # Try common JWT claims for user ID
-        user_id = (
-            decoded.get("sub") or 
-            decoded.get("user_id") or 
-            decoded.get("uid")
-        )
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token: no user identifier found"
-            )
-        
-        return user_id
-        
-    except Exception as e:
-        logger.error(f"Token verification failed: {e}")
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid authentication token"
-        )
+    # No valid authentication found at all
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required for profile features"
+    )
 
 
 async def get_user_id_allowing_guest(request: Request) -> str:
@@ -334,34 +328,46 @@ async def select_treatment_stage(
     """
     logger.info(f"User {user_id} selecting stage: {data.stage_id}")
     
-    logger.info(f"User {user_id} selecting stage: {data.stage_id}")
-    
-    # Use PathwayOrchestrator to handle the selection with validation
-    from services.pathway_orchestrator import PathwayOrchestrator, StageUpdateType
-    orchestrator = PathwayOrchestrator()
-    
-    result = await orchestrator.determine_current_stage(
-        patient_id=user_id,
-        user_text="",  # No text for explicit selection
-        explicit_stage_id=data.stage_id
-    )
-    
-    if result.update_type == StageUpdateType.VALIDATION_ERROR:
-        raise HTTPException(
-            status_code=400,
-            detail=result.error or "Invalid stage selection"
-        )
+    try:
+        # Validate stage exists
+        stage_service = get_patient_stage_service()
+        stage = stage_service.get_stage_by_id(data.stage_id)
         
-    # Get updated details for response
-    stage_service = get_patient_stage_service()
-    breadcrumb = stage_service.get_breadcrumb(data.stage_id)
-    
-    return {
-        "message": result.message,
-        "stage_id": data.stage_id,
-        "stage_name": result.stage_name,
-        "breadcrumb": breadcrumb
-    }
+        if not stage:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid stage ID: {data.stage_id}"
+            )
+        
+        # Update user profile with selected stage
+        profile_service = get_patient_profile_service()
+        
+        # Get or create profile (handles both OAuth and guest users)
+        profile = await profile_service.get_or_create_profile(user_id)
+        
+        # Update the detailed stage using existing service method
+        await profile_service.update_stage_detailed(user_id, data.stage_id)
+        
+        # Get breadcrumb for response
+        breadcrumb = stage_service.get_breadcrumb(data.stage_id)
+        
+        logger.info(f"Successfully updated stage for {user_id} to {stage.name} ({data.stage_id})")
+        
+        return {
+            "message": f"Stage updated to {stage.name}",
+            "stage_id": data.stage_id,
+            "stage_name": stage.name,
+            "breadcrumb": breadcrumb
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions (they're intentional)
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting stage for {user_id}: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to select stage: {str(e)}"
+        )
 
 
 @router.get("/my-stage", response_model=dict)
