@@ -54,7 +54,32 @@ async def get_authenticated_user_id(request: Request) -> str:
     """
     auth_header = request.headers.get("Authorization")
     
-    # Check for guest user header - not allowed for profile
+    # Try to validate Authorization header FIRST (before rejecting guest users)
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        
+        try:
+            # Decode JWT to get user ID
+            # For production, use firebase_admin.auth.verify_id_token(token)
+            # For now, we'll decode without verification (frontend handles this)
+            from jwt import decode
+            decoded = decode(token, options={"verify_signature": False})
+            
+            # Try common JWT claims for user ID
+            user_id = (
+                decoded.get("sub") or 
+                decoded.get("user_id") or 
+                decoded.get("uid")
+            )
+            
+            if user_id:
+                return user_id  # Valid OAuth token found, return immediately
+                
+        except Exception as e:
+            logger.error(f"Token verification failed: {e}")
+            # Fall through to check for guest/no auth
+    
+    # ONLY reject guest users if no valid Authorization token was found above
     guest_id = request.headers.get("X-User-ID")
     if guest_id:
         raise HTTPException(
@@ -62,42 +87,11 @@ async def get_authenticated_user_id(request: Request) -> str:
             detail="Profile features require authentication. Please sign in."
         )
     
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required for profile features"
-        )
-    
-    token = auth_header[7:]
-    
-    try:
-        # Decode JWT to get user ID
-        # For production, use firebase_admin.auth.verify_id_token(token)
-        # For now, we'll decode without verification (frontend handles this)
-        from jwt import decode
-        decoded = decode(token, options={"verify_signature": False})
-        
-        # Try common JWT claims for user ID
-        user_id = (
-            decoded.get("sub") or 
-            decoded.get("user_id") or 
-            decoded.get("uid")
-        )
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token: no user identifier found"
-            )
-        
-        return user_id
-        
-    except Exception as e:
-        logger.error(f"Token verification failed: {e}")
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid authentication token"
-        )
+    # No valid authentication found at all
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required for profile features"
+    )
 
 
 async def get_user_id_allowing_guest(request: Request) -> str:
