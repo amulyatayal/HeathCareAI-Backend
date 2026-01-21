@@ -101,7 +101,7 @@ def build_relationships(stages: Dict[str, dict]) -> List[str]:
 def main():
     # Paths
     script_dir = Path(__file__).parent
-    project_root = script_dir.parent
+    project_root = script_dir.parent.parent
     csv_path = project_root / "data" / "Knowledge Base Bank - BreastCancerStages.csv"
     json_path = project_root / "data" / "stage_hierarchy.json"
     

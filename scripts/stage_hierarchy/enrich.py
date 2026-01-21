@@ -91,7 +91,7 @@ def add_fields_to_stages(input_path: Path, output_path: Path):
     print(f"Updated {len(data.get('stages', {}))} stages with display_name and search_terms")
 
 if __name__ == "__main__":
-    input_path = Path(__file__).parent.parent / "data" / "stage_hierarchy.json"
+    input_path = Path(__file__).parent.parent.parent / "data" / "stage_hierarchy.json"
     output_path = input_path  # Overwrite in place
     add_fields_to_stages(input_path, output_path)
     print("Done!")
