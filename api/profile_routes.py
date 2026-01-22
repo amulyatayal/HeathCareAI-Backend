@@ -53,6 +53,12 @@ async def get_authenticated_user_id(request: Request) -> str:
         HTTPException 401: If not authenticated or using guest auth
     """
     auth_header = request.headers.get("Authorization")
+    guest_id = request.headers.get("X-User-ID")
+    
+    # Debug logging for auth troubleshooting
+    logger.info(f"[AUTH DEBUG] Endpoint: {request.url.path}")
+    logger.info(f"[AUTH DEBUG] Authorization header: {auth_header[:50] + '...' if auth_header and len(auth_header) > 50 else auth_header}")
+    logger.info(f"[AUTH DEBUG] X-User-ID header: {guest_id}")
     
     # Try to validate Authorization header FIRST (before rejecting guest users)
     if auth_header and auth_header.startswith("Bearer "):
@@ -72,22 +78,29 @@ async def get_authenticated_user_id(request: Request) -> str:
                 decoded.get("uid")
             )
             
+            logger.info(f"[AUTH DEBUG] Token decoded successfully. Claims: sub={decoded.get('sub')}, user_id={decoded.get('user_id')}, uid={decoded.get('uid')}")
+            logger.info(f"[AUTH DEBUG] Extracted user_id: {user_id}")
+            
             if user_id:
+                logger.info(f"[AUTH DEBUG] Authentication SUCCESS for user: {user_id}")
                 return user_id  # Valid OAuth token found, return immediately
+            else:
+                logger.warning(f"[AUTH DEBUG] Token valid but no user_id found in claims")
                 
         except Exception as e:
-            logger.error(f"Token verification failed: {e}")
+            logger.error(f"[AUTH DEBUG] Token verification failed: {e}")
             # Fall through to check for guest/no auth
     
     # ONLY reject guest users if no valid Authorization token was found above
-    guest_id = request.headers.get("X-User-ID")
     if guest_id:
+        logger.warning(f"[AUTH DEBUG] REJECTED: Guest user {guest_id} tried to access profile endpoint")
         raise HTTPException(
             status_code=401,
             detail="Profile features require authentication. Please sign in."
         )
     
     # No valid authentication found at all
+    logger.warning(f"[AUTH DEBUG] REJECTED: No authentication provided")
     raise HTTPException(
         status_code=401,
         detail="Authentication required for profile features"
