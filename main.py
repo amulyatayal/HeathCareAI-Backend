@@ -23,7 +23,7 @@ from config import settings
 # v1 API routes (deprecated - single agent)
 from api import chat_router, knowledge_router, health_router, categories_router, forum_router
 # v2 API routes (new - multi-agent pipeline)
-from api import pipeline_router, health_v2_router, debug_router
+from api import pipeline_router, health_v2_router, debug_router, profile_router
 
 # ================================
 # Logging Configuration
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events"""
     # Startup
     logger.info("=" * 60)
-    logger.info("🏥 Healthcare Companion AI Backend Starting...")
+    logger.info("Healthcare Companion AI Backend Starting...")
     logger.info(f"   Environment: {settings.app_env}")
     logger.info(f"   Debug Mode: {settings.debug}")
     logger.info(f"   API Prefix: {settings.api_prefix}")
@@ -175,6 +175,7 @@ app.include_router(forum_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v2")
 app.include_router(health_v2_router, prefix="/api/v2")
 app.include_router(debug_router, prefix="/api/v2")
+app.include_router(profile_router, prefix="/api/v2")
 
 
 # ================================
