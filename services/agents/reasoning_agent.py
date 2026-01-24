@@ -267,13 +267,16 @@ class ReasoningAgent(BaseAgent):
             f"- Avoid: {stage_info.get('avoid', 'making assumptions')}"
         )
         
-        # Format evidence
+        # Format evidence (PDF sources only - videos are shown separately in UI)
         evidence_context = "No evidence retrieved from knowledge base."
         if context.retrieval_result and context.retrieval_result.chunks:
             evidence_context = format_chunks_for_prompt(
                 context.retrieval_result.chunks,
                 max_chars=6000  # Leave room for rest of prompt
             )
+        
+        # Note: Video suggestions are NOT included in prompt - they appear in UI only
+        # This ensures the answer text only references approved PDF content
         
         # Add intent-specific rules
         additional_rules = self._get_additional_rules(context)
@@ -299,7 +302,7 @@ class ReasoningAgent(BaseAgent):
         
         logger.debug(f"Using {mode_name} mode for intent: {intent}")
         
-        # Citation template doesn't use additional_rules
+        # Citation template doesn't use additional_rules or video suggestions
         if citation_only_mode:
             return template.format(
                 agent_prompt=self.base_prompt,

@@ -376,6 +376,10 @@ class KnowledgeBaseService:
                           'should', 'would', 'could', 'will', 'be', 'have', 'has'}
             query_keywords = query_keywords - stop_words
             
+            # Keyword search fields: include video_title for YouTube index to improve relevance
+            is_video_index = "youtube" in (self.index_name or "").lower()
+            mm_fields = ["content^2", "video_title^2"] if is_video_index else ["content^2", "section"]
+            
             # Build hybrid search query for chunks
             hybrid_query = {
                 "size": limit * 2,  # Get extra for filtering
@@ -395,7 +399,7 @@ class KnowledgeBaseService:
                             {
                                 "multi_match": {
                                     "query": query,
-                                    "fields": ["content^2", "section"],
+                                    "fields": mm_fields,
                                     "type": "best_fields",
                                     "boost": KEYWORD_WEIGHT / VECTOR_WEIGHT
                                 }
@@ -424,9 +428,12 @@ class KnowledgeBaseService:
                 score = hit.get("_score", 0.0)
                 content = source.get("content", "")
                 
-                # Check for keyword match
+                # Check for keyword match (content; for video index also check title)
                 content_lower = content.lower()
                 has_keyword_match = any(kw in content_lower for kw in query_keywords)
+                if not has_keyword_match and is_video_index:
+                    title_lower = (source.get("video_title") or "").lower()
+                    has_keyword_match = any(kw in title_lower for kw in query_keywords)
                 
                 if has_keyword_match:
                     keyword_match_found = True
@@ -437,20 +444,58 @@ class KnowledgeBaseService:
                 # Handle both PDF chunks (source_file) and Q&A pairs (source_url)
                 source_file = source.get("source_file") or source.get("source_url") or "Unknown"
                 
+                # Check if this is a video index (youtube_transcripts)
+                is_video_index = "youtube" in self.index_name.lower() or "video" in self.index_name.lower()
+                
                 chunk = {
                     "chunk_id": source.get("chunk_id", hit["_id"]),
+                    "document_id": source.get("document_id", hit["_id"]),
                     "content": content,
                     "source_file": source_file,
-                    "title": source.get("title"),  # Q&A pairs have title
+                    "title": source.get("title") or source.get("video_title"),  # Q&A pairs or videos have title
                     "page_start": source.get("page_start", 1),
                     "page_end": source.get("page_end", 1),
                     "section": source.get("section"),
                     "content_type": source.get("content_type", "medical_article"),
                     "relevance_score": score,
+                    "score": score,  # Alias for compatibility
                     "has_keyword_match": has_keyword_match,
                     "answer_type": source.get("answer_type"),  # For per-intent KBs
-                    "source_excerpt": source.get("source_excerpt")  # Verbatim text
+                    "source_excerpt": source.get("source_excerpt"),  # Verbatim text
+                    "metadata": {}  # Store all source fields for video-specific data
                 }
+                
+                # For video indices, include video-specific fields in metadata and top-level
+                if is_video_index:
+                    chunk["video_id"] = source.get("video_id")
+                    chunk["video_title"] = source.get("video_title")
+                    chunk["video_url"] = source.get("video_url")
+                    chunk["channel"] = source.get("channel")
+                    chunk["channel_name"] = source.get("channel")  # Alias
+                    chunk["timestamped_url"] = source.get("timestamped_url")
+                    chunk["start_seconds"] = source.get("start_seconds")
+                    chunk["end_seconds"] = source.get("end_seconds")
+                    chunk["start_timestamp"] = source.get("start_timestamp")
+                    chunk["end_timestamp"] = source.get("end_timestamp")
+                    chunk["chunk_index"] = source.get("chunk_index")
+                    # Also store in metadata for compatibility
+                    chunk["metadata"] = {
+                        "video_id": source.get("video_id"),
+                        "video_title": source.get("video_title"),
+                        "video_url": source.get("video_url"),
+                        "channel": source.get("channel"),
+                        "channel_name": source.get("channel"),
+                        "timestamped_url": source.get("timestamped_url"),
+                        "start_seconds": source.get("start_seconds"),
+                        "end_seconds": source.get("end_seconds"),
+                        "start_timestamp": source.get("start_timestamp"),
+                        "end_timestamp": source.get("end_timestamp"),
+                        "chunk_index": source.get("chunk_index")
+                    }
+                else:
+                    # For non-video indices, store all source fields in metadata
+                    chunk["metadata"] = {k: v for k, v in source.items() if k not in ["content", "embedding"]}
+                
                 chunks.append(chunk)
                 
                 if len(chunks) >= limit:

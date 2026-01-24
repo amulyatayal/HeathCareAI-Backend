@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events"""
     # Startup
     logger.info("=" * 60)
-    logger.info("🏥 Healthcare Companion AI Backend Starting...")
+    logger.info("Healthcare Companion AI Backend Starting...")
     logger.info(f"   Environment: {settings.app_env}")
     logger.info(f"   Debug Mode: {settings.debug}")
     logger.info(f"   API Prefix: {settings.api_prefix}")
@@ -229,3 +229,4 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower()
     )
 
+# [SA] - made this change for a trial run. Want to try out the full cycle of making change, commmiting, pushing and merging.

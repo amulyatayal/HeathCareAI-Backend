@@ -107,10 +107,19 @@ class BaseAgent(ABC):
         if self._bedrock_client is None:
             import boto3
             from config.settings import settings
-            self._bedrock_client = boto3.client(
-                'bedrock-runtime',
-                region_name=settings.aws_region
-            )
+            
+            # Build client kwargs
+            client_kwargs = {
+                'service_name': 'bedrock-runtime',
+                'region_name': settings.aws_region
+            }
+            
+            # Add credentials if provided in settings
+            if settings.aws_access_key_id and settings.aws_secret_access_key:
+                client_kwargs['aws_access_key_id'] = settings.aws_access_key_id
+                client_kwargs['aws_secret_access_key'] = settings.aws_secret_access_key
+            
+            self._bedrock_client = boto3.client(**client_kwargs)
         return self._bedrock_client
     
     @abstractmethod

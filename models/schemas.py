@@ -101,6 +101,33 @@ class RetrievalResult(BaseModel):
 
 
 # ================================
+# Video Retrieval Result
+# ================================
+
+class VideoRetrievalChunk(BaseModel):
+    """A video transcript chunk from YouTube KB."""
+    chunk_id: str = Field(..., description="Unique identifier for the chunk")
+    video_id: str = Field(..., description="YouTube video ID")
+    video_title: str = Field(..., description="Title of the video")
+    video_url: str = Field(..., description="Full YouTube video URL")
+    channel_name: Optional[str] = Field(None, description="YouTube channel name")
+    transcript_excerpt: str = Field(..., description="Relevant transcript snippet")
+    timestamp_start: Optional[int] = Field(None, description="Start time in seconds")
+    timestamp_end: Optional[int] = Field(None, description="End time in seconds")
+    timestamped_url: Optional[str] = Field(None, description="URL with timestamp parameter")
+    score: float = Field(default=0.0, description="Relevance score")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class VideoRetrievalResult(BaseModel):
+    """Output from video transcript retrieval."""
+    videos: List[VideoRetrievalChunk] = Field(default_factory=list)
+    total_retrieved: int = Field(default=0)
+    sufficient_videos: bool = Field(default=False)
+    knowledge_base_used: str = Field(default="youtube_transcripts")
+
+
+# ================================
 # Reasoning Agent Output (Section 8)
 # ================================
 
@@ -161,6 +188,7 @@ class PipelineContext(BaseModel):
     intent_result: Optional[IntentResult] = Field(None)
     stage_result: Optional[StageResult] = Field(None)
     retrieval_result: Optional[RetrievalResult] = Field(None)
+    video_retrieval_result: Optional["VideoRetrievalResult"] = Field(None, description="Video suggestions from YouTube KB")
     reasoning_result: Optional[ReasoningResult] = Field(None)
     validation_result: Optional[ValidationResult] = Field(None)
     
@@ -196,6 +224,20 @@ class AgentTrace(BaseModel):
 
 
 # ================================
+# Suggested Video (for response)
+# ================================
+
+class SuggestedVideo(BaseModel):
+    """A suggested video to watch."""
+    video_id: str = Field(..., description="YouTube video ID")
+    title: str = Field(..., description="Video title")
+    url: str = Field(..., description="Video URL (with timestamp if available)")
+    channel_name: Optional[str] = Field(None, description="Channel name")
+    relevance_note: Optional[str] = Field(None, description="Why this video is relevant")
+    timestamp_seconds: Optional[int] = Field(None, description="Start timestamp in seconds")
+
+
+# ================================
 # Pipeline Response
 # ================================
 
@@ -216,6 +258,7 @@ class PipelineResponse(BaseModel):
     confidence: float = Field(default=0.8)
     abstained: bool = Field(default=False)
     disclaimer_included: bool = Field(default=False)
+    suggested_videos: List[SuggestedVideo] = Field(default_factory=list, description="Suggested YouTube videos")
     
     # Debug/trace info (optional, for logging)
     trace: List[AgentTrace] = Field(default_factory=list)

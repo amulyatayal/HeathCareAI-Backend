@@ -15,6 +15,7 @@ from services.agents.base_agent import BaseAgent
 from services.agents.intent_agent import IntentAgent
 from services.agents.stage_agent_v2 import StageAgentV2
 from services.agents.retrieval_agent import RetrievalAgent
+from services.agents.video_retrieval_agent import VideoRetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
 from services.patient_profile_service import get_patient_profile_service
@@ -23,6 +24,7 @@ from models.schemas import (
     PipelineResponse,
     AgentTrace,
     AgentStatus,
+    SuggestedVideo,
     StageResult,
     create_pipeline_context
 )
@@ -68,12 +70,13 @@ class PipelineOrchestrator:
     └──────────────┼──────────────────────────────────────────┘
                    ▼
     ┌─────────────────────────────────────────────────────────┐
-    │  PHASE 2: Retrieval                                     │
-    │  ┌──────────────┐                                       │
-    │  │  Retrieval   │  ← Uses intent to route to correct KB │
-    │  │    Agent     │                                       │
-    │  └──────┬───────┘                                       │
-    └─────────┼───────────────────────────────────────────────┘
+    │  PHASE 2: Retrieval (PARALLEL)                          │
+    │  ┌──────────────┐   ┌─────────────────┐                │
+    │  │  Retrieval   │   │ VideoRetrieval  │                │
+    │  │    Agent     │   │     Agent       │ ← YouTube KB   │
+    │  └──────┬───────┘   └────────┬────────┘                │
+    │         └────────┬───────────┘                          │
+    └──────────────────┼──────────────────────────────────────┘
               ▼
     ┌─────────────────────────────────────────────────────────┐
     │  PHASE 3: Reasoning                                     │
@@ -97,6 +100,7 @@ class PipelineOrchestrator:
         self.intent_agent = IntentAgent()
         self.stage_agent = StageAgentV2()
         self.retrieval_agent = RetrievalAgent()
+        self.video_retrieval_agent = VideoRetrievalAgent()  # YouTube video retrieval
         self.validator_agent = ValidatorAgent(use_llm_validation=enable_llm_validation)
         # Reasoning agents are created on-demand via factory
         
@@ -471,24 +475,46 @@ class PipelineOrchestrator:
         self,
         ctx: PipelineContext
     ) -> PipelineContext:
-        """Run retrieval based on classified intent."""
-        logger.info("Phase 2: Running retrieval...")
+        """Run document and video retrieval in PARALLEL."""
+        logger.info("Phase 2: Running retrieval (parallel - docs + videos)...")
         
-        ctx, retrieval_trace = await self.retrieval_agent.run(ctx)
-        self._traces.append(retrieval_trace)
+        # Create tasks for parallel execution
+        doc_retrieval_task = asyncio.create_task(self.retrieval_agent.run(ctx))
+        video_retrieval_task = asyncio.create_task(self.video_retrieval_agent.run(ctx))
+        
+        # Wait for both to complete
+        (ctx_docs, doc_trace), (ctx_videos, video_trace) = await asyncio.gather(
+            doc_retrieval_task, video_retrieval_task
+        )
+        
+        # Merge results into context
+        ctx.retrieval_result = ctx_docs.retrieval_result
+        ctx.video_retrieval_result = ctx_videos.video_retrieval_result
+        
+        # Store traces
+        self._traces.extend([doc_trace, video_trace])
+        
+        # Calculate combined latency (max of both since parallel)
+        combined_latency = max(doc_trace.latency_ms, video_trace.latency_ms)
+        
+        # Build output summary
+        doc_count = ctx.retrieval_result.total_retrieved if ctx.retrieval_result else 0
+        video_count = ctx.video_retrieval_result.total_retrieved if ctx.video_retrieval_result else 0
+        doc_sufficient = ctx.retrieval_result.sufficient_evidence if ctx.retrieval_result else False
+        
         self._log_step(
             step_name="retrieval",
-            agent_name="retrieval_agent",
+            agent_name="retrieval_parallel",
             input_summary="",
-            output_summary=f"chunks={ctx.retrieval_result.total_retrieved}, sufficient={ctx.retrieval_result.sufficient_evidence}",
-            latency_ms=retrieval_trace.latency_ms,
+            output_summary=f"doc_chunks={doc_count}, videos={video_count}, sufficient={doc_sufficient}",
+            latency_ms=combined_latency,
             model_used=None,
             safety_flags=[],
         )
         
         logger.info(
-            f"Retrieval complete: {ctx.retrieval_result.total_retrieved} chunks, "
-            f"sufficient={ctx.retrieval_result.sufficient_evidence}"
+            f"Retrieval complete: {doc_count} doc chunks, {video_count} videos, "
+            f"sufficient={doc_sufficient}"
         )
         
         return ctx
@@ -571,6 +597,17 @@ class PipelineOrchestrator:
         if ctx.reasoning_result and ctx.reasoning_result.citations:
             citations = ctx.reasoning_result.citations
         
+        # Extract suggested videos from video retrieval result
+        suggested_videos = self._extract_suggested_videos(ctx)
+        logger.info(
+            f"Orchestrator: Extracted {len(suggested_videos)} suggested videos. "
+            f"video_retrieval_result exists: {ctx.video_retrieval_result is not None}, "
+            f"videos count: {len(ctx.video_retrieval_result.videos) if ctx.video_retrieval_result else 0}"
+        )
+        
+        if suggested_videos:
+            logger.info(f"Orchestrator: First suggested video: {suggested_videos[0].title} ({suggested_videos[0].video_id})")
+        
         response = PipelineResponse(
             request_id=ctx.request_id,
             response=response_text,
@@ -580,12 +617,15 @@ class PipelineOrchestrator:
             confidence=ctx.reasoning_result.confidence if ctx.reasoning_result else 0.0,
             abstained=ctx.reasoning_result.abstained if ctx.reasoning_result else True,
             disclaimer_included=True,  # We always add disclaimers for medical content
+            suggested_videos=suggested_videos,
             trace=self._traces if include_trace else [],
             total_latency_ms=total_latency,
             needs_onboarding=needs_onboarding,
             sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest),
             modification_proposal=modification_proposal
         )
+        
+        logger.info(f"Orchestrator: PipelineResponse created with {len(response.suggested_videos)} suggested_videos")
         # Emit metrics
         record_latency(
             "pipeline.total_latency_ms",
@@ -613,6 +653,37 @@ class PipelineOrchestrator:
             safety_flags=[],
         )
         return response
+    
+    def _extract_suggested_videos(
+        self,
+        ctx: PipelineContext
+    ) -> List[SuggestedVideo]:
+        """Extract suggested videos from video retrieval result."""
+        suggested_videos = []
+        
+        if ctx.video_retrieval_result and ctx.video_retrieval_result.videos:
+            for video in ctx.video_retrieval_result.videos[:3]:  # Top 3 videos
+                # Use timestamped URL if available, otherwise regular URL
+                url = video.timestamped_url or video.video_url
+                
+                # Create relevance note from transcript excerpt
+                relevance_note = None
+                if video.transcript_excerpt:
+                    excerpt = video.transcript_excerpt[:150]
+                    if len(video.transcript_excerpt) > 150:
+                        excerpt += "..."
+                    relevance_note = excerpt
+                
+                suggested_videos.append(SuggestedVideo(
+                    video_id=video.video_id,
+                    title=video.video_title,
+                    url=url,
+                    channel_name=video.channel_name,
+                    relevance_note=relevance_note,
+                    timestamp_seconds=video.timestamp_start
+                ))
+        
+        return suggested_videos
     
     def _create_clarification_response(
         self,
@@ -643,6 +714,7 @@ class PipelineOrchestrator:
             confidence=0.5,
             abstained=False,
             disclaimer_included=False,
+            suggested_videos=[],
             trace=self._traces,
             total_latency_ms=total_latency
         )
@@ -668,6 +740,7 @@ class PipelineOrchestrator:
             confidence=0.0,
             abstained=True,
             disclaimer_included=False,
+            suggested_videos=[],
             trace=self._traces,
             total_latency_ms=total_latency
         )
