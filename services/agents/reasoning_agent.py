@@ -110,14 +110,39 @@ CRITICAL RULES (CITATION-ONLY MODE):
    - In treatment: Validate challenges, remind them their care team is there
    - Post-treatment: Celebrate progress, acknowledge ongoing concerns are normal
 5. Your intro and closing should NOT contain any medical information or summary of the quotes.
-6. After each quote, include the source reference: [📄 Source Name, p.XX]
-7. Format quotes clearly using quotation marks.
+6. FORMAT EACH QUOTE AS A STYLED BLOCK using this exact markdown structure:
+
+   > "Verbatim quote text goes here..."
+   >
+   > — [📄 Source Name, page number](URL)
+
+   - Use markdown blockquote (>) for the quote
+   - Put the verbatim text in quotation marks
+   - Add the source link on a new line with "—" prefix
+   - IMPORTANT: Use the ACTUAL page number from the source (e.g., "p.1", "p.5", "pp.2-3") - do NOT use "p.XX"
+   - Use the URL provided with each source (shown as "URL: https://...")
+   - Leave a blank line between each quote block
+
+7. Example of properly formatted citation (note the real page number "p.5"):
+
+   > "Chemotherapy destroys cancer cells by affecting their ability to divide and grow."
+   >
+   > — [📄 Chemotherapy for Breast Cancer, p.5](https://breastcancernow.org/media-assets/bcc17.pdf)
 
 RESPONSE FORMAT:
-1. Stage-personalized empathetic intro (NO medical content)
-2. Verbatim Quote 1 with source
-3. Verbatim Quote 2 with source (if relevant)
-4. Stage-personalized empathetic closing (NO medical summary) with 💜
+1. Stage-personalized empathetic intro (1-2 sentences, NO medical content)
+
+2. **From the sources:**
+
+   > "Quote 1..."
+   >
+   > — [📄 Source](URL)
+
+   > "Quote 2..."
+   >
+   > — [📄 Source](URL)
+
+3. Stage-personalized empathetic closing (1-2 sentences, NO medical summary) with 💜
 
 {disclaimer_instruction}"""
 
@@ -519,7 +544,9 @@ class ReasoningAgent(BaseAgent):
             
             # Format: verbatim text with source link icon
             # Using markdown link format: [📄](source_url)
-            source_link = f"[📄 {source_name}{page_info}]({source_file})"
+            # Use actual source_url from metadata if available, otherwise fall back to source_file
+            source_url = chunk.metadata.get("source_url") or chunk.source_file or "#"
+            source_link = f"[📄 {source_name}{page_info}]({source_url})"
             
             response_parts.append(f"{answer_text}\n\n*Source: {source_link}*")
             

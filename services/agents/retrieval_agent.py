@@ -188,6 +188,23 @@ class RetrievalAgent(BaseAgent):
                 if chunk_answer_type and chunk_answer_type != answer_type_filter:
                     continue  # Skip non-matching answer types
             
+            # Get metadata from chunk_data (includes source_url from OpenSearch)
+            chunk_metadata = chunk_data.get("metadata", {})
+            
+            # Merge with additional fields
+            metadata = {
+                "title": chunk_data.get("title"),
+                "category": chunk_data.get("category"),
+                "content_type": chunk_data.get("content_type"),
+                "tags": chunk_data.get("tags", []),
+                "keyword_match": chunk_data.get("keyword_match", False),
+                "answer_type": chunk_data.get("answer_type"),
+                "source_url": chunk_metadata.get("source_url") or chunk_data.get("source_url"),
+                "source_name": chunk_metadata.get("source_name"),
+                "source_display_name": chunk_metadata.get("source_display_name"),
+                "source_excerpt": chunk_metadata.get("source_excerpt"),
+            }
+            
             chunk = RetrievalChunk(
                 chunk_id=chunk_data.get("document_id", ""),
                 content=chunk_data.get("content", ""),
@@ -196,14 +213,7 @@ class RetrievalAgent(BaseAgent):
                 section=chunk_data.get("section"),
                 page_start=chunk_data.get("page_start"),
                 page_end=chunk_data.get("page_end"),
-                metadata={
-                    "title": chunk_data.get("title"),
-                    "category": chunk_data.get("category"),
-                    "content_type": chunk_data.get("content_type"),
-                    "tags": chunk_data.get("tags", []),
-                    "keyword_match": chunk_data.get("keyword_match", False),
-                    "answer_type": chunk_data.get("answer_type")
-                }
+                metadata=metadata
             )
             chunks.append(chunk)
         
@@ -286,8 +296,17 @@ def format_chunks_for_prompt(chunks: List[RetrievalChunk], max_chars: int = 8000
     total_chars = 0
     
     for i, chunk in enumerate(chunks, 1):
-        # Format source citation
+        # Format source citation with URL if available
         source = chunk.source_file or "Unknown source"
+        source_url = chunk.metadata.get("source_url") if chunk.metadata else None
+        source_name = chunk.metadata.get("source_display_name") if chunk.metadata else None
+        
+        # Use display name if available, otherwise clean up filename
+        if source_name:
+            display_name = source_name
+        else:
+            display_name = source.replace(".pdf", "").replace("-", " ").replace("_", " ").title()
+        
         section = f", {chunk.section}" if chunk.section else ""
         pages = ""
         if chunk.page_start:
@@ -295,7 +314,11 @@ def format_chunks_for_prompt(chunks: List[RetrievalChunk], max_chars: int = 8000
             if chunk.page_end and chunk.page_end != chunk.page_start:
                 pages = f", pp.{chunk.page_start}-{chunk.page_end}"
         
-        citation = f"[Source {i}: {source}{section}{pages}]"
+        # Include URL in citation so LLM can create clickable links
+        if source_url:
+            citation = f"[Source {i}: {display_name}{section}{pages}] (URL: {source_url})"
+        else:
+            citation = f"[Source {i}: {display_name}{section}{pages}]"
         
         # Format chunk content
         content = chunk.content.strip()

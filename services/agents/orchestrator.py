@@ -26,9 +26,11 @@ from models.schemas import (
     AgentStatus,
     SuggestedVideo,
     StageResult,
+    ModificationProposal,
     create_pipeline_context
 )
 from config.pipeline_config import IntentCategory, PatientStage, CertaintyLevel, SPEC_VERSION
+from config.agent_routing import is_citation_only
 from config.settings import settings
 from services.metrics import record_latency, record_count
 
@@ -608,16 +610,21 @@ class PipelineOrchestrator:
         if suggested_videos:
             logger.info(f"Orchestrator: First suggested video: {suggested_videos[0].title} ({suggested_videos[0].video_id})")
         
+        # Determine if we should show sources section (hide for citation-only intents)
+        intent = ctx.intent_result.intent if ctx.intent_result else IntentCategory.UNKNOWN
+        show_sources = not is_citation_only(intent)
+        
         response = PipelineResponse(
             request_id=ctx.request_id,
             response=response_text,
-            intent=ctx.intent_result.intent if ctx.intent_result else IntentCategory.UNKNOWN,
+            intent=intent,
             stage=ctx.stage_result.stage if ctx.stage_result else "unknown",
             citations=citations,
             confidence=ctx.reasoning_result.confidence if ctx.reasoning_result else 0.0,
             abstained=ctx.reasoning_result.abstained if ctx.reasoning_result else True,
             disclaimer_included=True,  # We always add disclaimers for medical content
             suggested_videos=suggested_videos,
+            show_sources=show_sources,
             trace=self._traces if include_trace else [],
             total_latency_ms=total_latency,
             needs_onboarding=needs_onboarding,

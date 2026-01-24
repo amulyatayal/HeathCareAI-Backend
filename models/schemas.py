@@ -259,6 +259,7 @@ class PipelineResponse(BaseModel):
     abstained: bool = Field(default=False)
     disclaimer_included: bool = Field(default=False)
     suggested_videos: List[SuggestedVideo] = Field(default_factory=list, description="Suggested YouTube videos")
+    show_sources: bool = Field(default=True, description="Whether frontend should display the Sources Consulted section")
     
     # Debug/trace info (optional, for logging)
     trace: List[AgentTrace] = Field(default_factory=list)
