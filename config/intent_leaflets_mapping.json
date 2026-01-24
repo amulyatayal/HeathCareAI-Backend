@@ -3,6 +3,10 @@
   "_version": "2.0",
   "symptoms": {
     "leaflets": [
+      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf",
+      "bcc2-know-your-breasts-booklet-web.pdf",
+      "bcc71-breast-pain-web-2025-new-address.pdf",
+      "bcn001-tlc-infographic-all-skintones-web.pdf",
       "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
       "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
       "bcc161-understanding-your-results-web.pdf",
@@ -23,14 +27,20 @@
       "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
       "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
+      "bcc7-breast-reconstruction-booklet-2024-web.pdf",
+      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
+      "bcn256-easy-read-surgery-for-primary-breast-cancer-web-pdf.pdf",
       "bcc98-diet-and-breast-cancer-web.pdf",
-      "Understanding+breast+reconstruction.pdf"
+      "Understanding+breast+reconstruction.pdf,"
     ],
     "kb_index": "kb_surgery_procedures"
   },
   "drains_wound_care": {
     "leaflets": [
-      "bcc151-your-operation-and-recovery-web.pdf"
+      "bcc151-your-operation-and-recovery-web.pdf",
+      "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
+      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf"
     ],
     "kb_index": "kb_drains_wound_care"
   },
@@ -80,6 +90,8 @@
   },
   "side_effects": {
     "leaflets": [
+      "bcc17-chemotherapy-for-breast-cancer-web.pdf",
+      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf",
       "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
       "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
@@ -107,7 +119,8 @@
       "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
       "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
-      "MAC12515_Physical+activity_E06_IntPDF_02.pdf"
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf",
+      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf"
     ],
     "kb_index": "kb_pre_surgery_prehab"
   },
@@ -130,7 +143,8 @@
       "MAC14215+Worrying+about+cancer+coming+back+E04+Interactive+PDF.pdf",
       "bcc169-after-breast-cancer-what-now-2025-web.pdf",
       "bcc66-breast-cancer-in-younger-women-web.pdf",
-      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf"
+      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf",
+      "bcn402_changes_to_be_aware_of_after_breast_cancer.pdf"
     ],
     "kb_index": "kb_follow_up_care"
   },
@@ -161,8 +175,9 @@
     "kb_index": "kb_emotional_support"
   },
   "clothing": {
-    "leaflets": [
-      "bcc123-breast-prostheses-bras-and-clothes-web-pdf.pdf"
+   "leaflets": [
+      "bcc123-breast-prostheses-bras-and-clothes-web-pdf.pdf",
+      "bcc196-your-guide-to-a-well-fitting-bra-web.pdf"
     ],
     "kb_index": "kb_clothing"
   },
@@ -174,12 +189,18 @@
       "bcc45-invasive-lobular-breast-cancer-web-pdf.pdf",
       "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
       "bcc39-dcis-web.pdf",
-      "bcc23-inflammatory-breast-cancer-web-2025-new-address.pdf"
+      "bcc23-inflammatory-breast-cancer-web-2025-new-address.pdf",
+      "bcc70-your-breast-clinic-appointment-web.pdf",
+      "bcc161-understanding-your-results-web.pdf",
+      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf"
     ],
     "kb_index": "kb_diagnosis_testing"
   },
   "admin_logistics": {
-    "leaflets": [],
+    "leaflets": [
+      "bcc70-your-breast-clinic-appointment-web.pdf",
+      "bcn704-about-breast-cancer-now-leaflet-2023-web.pdf"
+    ],
     "kb_index": "kb_admin_logistics"
   },
   "safety_red_flags": {
@@ -189,7 +210,11 @@
     "kb_index": "kb_safety_red_flags"
   },
   "statistics": {
-    "leaflets": [],
+    "leaflets": [
+      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
+      "bcn240-reducing-your-risk-of-breast-cancer-web.pdf",
+      "bcn244-family-history-web.pdf"
+    ],
     "kb_index": "kb_statistics"
   },
   "unknown": {
