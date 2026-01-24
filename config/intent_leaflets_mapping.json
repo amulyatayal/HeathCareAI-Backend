@@ -1,217 +1,199 @@
 {
   "_description": "Maps each intent category to the specific PDF leaflets to use for that intent's knowledge base. Used for per-intent Q&A generation and retrieval.",
-  "_version": "1.0",
-  
+  "_version": "2.0",
   "symptoms": {
     "leaflets": [
-      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf",
-      "bcc2-know-your-breasts-booklet-web.pdf",
-      "bcc71-breast-pain-web-2025-new-address.pdf",
-      "bcn001-tlc-infographic-all-skintones-web.pdf"
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
+      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
+      "bcc161-understanding-your-results-web.pdf",
+      "bcc169-after-breast-cancer-what-now-2025-web.pdf",
+      "bcc18-menopausal-symptoms-and-breast-cancer-2023-web-pdf.pdf",
+      "bcc197-moving-forward-web-pdf.pdf",
+      "bcc23-inflammatory-breast-cancer-web-2025-new-address.pdf",
+      "bcn402_changes_to_be_aware_of_after_breast_cancer.pdf",
+      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf",
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf",
+      "MAC14215+Worrying+about+cancer+coming+back+E04+Interactive+PDF.pdf",
+      "2024_Your_treatment_record_web_1.pdf"
     ],
     "kb_index": "kb_symptoms"
   },
-  
   "surgery_procedures": {
     "leaflets": [
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
+      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
-      "bcc7-breast-reconstruction-booklet-2024-web.pdf",
-      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
-      "bcn256-easy-read-surgery-for-primary-breast-cancer-web-pdf.pdf"
+      "bcc98-diet-and-breast-cancer-web.pdf",
+      "Understanding+breast+reconstruction.pdf"
     ],
     "kb_index": "kb_surgery_procedures"
   },
-  
   "drains_wound_care": {
     "leaflets": [
-      "bcc151-your-operation-and-recovery-web.pdf",
-      "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
-      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
-      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf"
+      "bcc151-your-operation-and-recovery-web.pdf"
     ],
     "kb_index": "kb_drains_wound_care"
   },
-  
   "cancer_treatment": {
     "leaflets": [
       "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
-      "bcc126-lobular-neoplasia-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
       "bcc161-understanding-your-results-web.pdf",
-      "bcc169-after-breast-cancer-what-now-2025-web.pdf",
       "bcc17-chemotherapy-for-breast-cancer-web.pdf",
-      "bcc173-secondary-breast-cancer-resource-pack-2022-web-pdf.pdf",
-      "bcc197-moving-forward-web-pdf.pdf",
-      "bcc23-inflammatory-breast-cancer-web-2025-new-address.pdf",
-      "bcc236-secondary-breast-cancer-personal-organiser-2022-web-pdf.pdf",
-      "bcc25-breast-cancer-during-and-after-pregnancy-web.pdf",
-      "bcc26-radiotherapy-for-primary-breast-cancer-web-pdf.pdf",
-      "bcc30-secondary-breast-cancer-in-the-bone-web.pdf",
-      "bcc121-capecitabine-web.pdf",
       "bcc20-tamoxifen-web.pdf",
       "bcc238-zoledronic-acid-web-pdf.pdf",
+      "bcc26-radiotherapy-for-primary-breast-cancer-web-pdf.pdf",
       "bcc31-anastrozole-2022-web-pdf.pdf",
       "bcc33-goserelin-web-pdf.pdf",
       "bcc34-paclitaxel-web.pdf",
       "bcc35-docetaxel-web.pdf",
-      "bcc36-secondary-breast-cancer-in-liver-2023-web-pdf.pdf",
-      "bcc39-dcis-web.pdf",
-      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
-      "bcc40-secondary-breast-cancer-in-the-lung-web.pdf",
       "bcc41-trastuzumab-2023-web-pdf.pdf",
-      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf",
-      "bcc45-invasive-lobular-breast-cancer-web-pdf.pdf",
       "bcc46-exemestane-2022-web-pdf.pdf",
-      "bcc56-secondary-breast-cancer-in-the-brain-web-pdf.pdf",
+      "bcn256-easy-read-surgery-for-primary-breast-cancer-web-pdf.pdf",
       "bcc64-letrozole-2022-web-pdf.pdf",
-      "bcc66-breast-cancer-in-younger-women-web.pdf",
-      "bcc7-breast-reconstruction-booklet-2024-web.pdf"
+      "bcn265-phesgo-pertuzumab-and-trastuzumab-web.pdf",
+      "bcn255-easy-read-diagnosed-with-primary-breast-cancer-web-pdf.pdf",
+      "bcn249-ec-t-chemotherapy-web.pdf",
+      "bcc98-diet-and-breast-cancer-web.pdf",
+      "MAC11616_E13_Breast+cancer_IntPDF_RP_20241009.pdf"
     ],
     "kb_index": "kb_cancer_treatment"
   },
-  
   "medication_info": {
     "leaflets": [
+      "bcc121-capecitabine-web.pdf",
       "bcc17-chemotherapy-for-breast-cancer-web.pdf",
       "bcc20-tamoxifen-web.pdf",
+      "bcc238-zoledronic-acid-web-pdf.pdf",
       "bcc31-anastrozole-2022-web-pdf.pdf",
-      "bcc46-exemestane-2022-web-pdf.pdf",
-      "bcc64-letrozole-2022-web-pdf.pdf",
       "bcc33-goserelin-web-pdf.pdf",
       "bcc34-paclitaxel-web.pdf",
       "bcc35-docetaxel-web.pdf",
       "bcc41-trastuzumab-2023-web-pdf.pdf",
-      "bcc121-capecitabine-web.pdf",
-      "bcc238-zoledronic-acid-web-pdf.pdf",
+      "bcc46-exemestane-2022-web-pdf.pdf",
+      "bcc64-letrozole-2022-web-pdf.pdf",
+      "bcn265-phesgo-pertuzumab-and-trastuzumab-web.pdf",
       "bcn249-ec-t-chemotherapy-web.pdf",
-      "bcn265-phesgo-pertuzumab-and-trastuzumab-web.pdf"
+      "MAC11616_E13_Breast+cancer_IntPDF_RP_20241009.pdf"
     ],
     "kb_index": "kb_medication_info"
   },
-  
   "side_effects": {
     "leaflets": [
-      "bcc17-chemotherapy-for-breast-cancer-web.pdf",
-      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf",
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
+      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
+      "bcc151-your-operation-and-recovery-web.pdf",
       "bcc18-menopausal-symptoms-and-breast-cancer-2023-web-pdf.pdf",
-      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf"
+      "bcc20-tamoxifen-web.pdf",
+      "bcc238-zoledronic-acid-web-pdf.pdf",
+      "bcc26-radiotherapy-for-primary-breast-cancer-web-pdf.pdf",
+      "bcc31-anastrozole-2022-web-pdf.pdf",
+      "bcc33-goserelin-web-pdf.pdf",
+      "bcc34-paclitaxel-web.pdf",
+      "bcc35-docetaxel-web.pdf",
+      "bcc41-trastuzumab-2023-web-pdf.pdf",
+      "bcc46-exemestane-2022-web-pdf.pdf",
+      "bcc64-letrozole-2022-web-pdf.pdf",
+      "bcn265-phesgo-pertuzumab-and-trastuzumab-web.pdf",
+      "bcn249-ec-t-chemotherapy-web.pdf",
+      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf",
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf",
+      "MAC12161_E05_late-effects_breast_cancer_20250404.pdf"
     ],
     "kb_index": "kb_side_effects"
   },
-  
   "pre_surgery_prehab": {
     "leaflets": [
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
       "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
-      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf"
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf"
     ],
     "kb_index": "kb_pre_surgery_prehab"
   },
-  
   "post_surgery_recovery": {
     "leaflets": [
+      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
+      "bbc5-managing-lymphoedema-after-breast-cancer-web-pdf.pdf",
       "bcc151-your-operation-and-recovery-web.pdf",
       "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
-      "bcc7-breast-reconstruction-booklet-2024-web.pdf",
-      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
-      "bcc169-after-breast-cancer-what-now-2025-web.pdf"
+      "Understanding+breast+reconstruction.pdf",
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf"
     ],
     "kb_index": "kb_post_surgery_recovery"
   },
-  
   "follow_up_care": {
     "leaflets": [
-      "bcc169-after-breast-cancer-what-now-2025-web.pdf",
+      "bcc110-your-body-intimacy-and-sex-web-v2.pdf",
+      "bcc18-menopausal-symptoms-and-breast-cancer-2023-web-pdf.pdf",
       "bcc197-moving-forward-web-pdf.pdf",
-      "bcn_408_updated-moving-forward-booklet_final_ellen-sadler.pdf",
-      "bcn402_changes_to_be_aware_of_after_breast_cancer.pdf",
-      "bcn003-signs-and-symptoms-of-breast-cancer-recurrence-infographic-web.pdf"
+      "MAC14215+Worrying+about+cancer+coming+back+E04+Interactive+PDF.pdf",
+      "bcc169-after-breast-cancer-what-now-2025-web.pdf",
+      "bcc66-breast-cancer-in-younger-women-web.pdf",
+      "bcc54-breast-cancer-and-hairloss-2023-web-pdf.pdf"
     ],
     "kb_index": "kb_follow_up_care"
   },
-  
   "nutrition": {
     "leaflets": [
-      "bcc98-diet-and-breast-cancer-web.pdf"
+      "bcc98-diet-and-breast-cancer-web.pdf",
+      "22026_10061.pdf",
+      "MAC13614_E05_Building-up_diet_20250702.pdf"
     ],
     "kb_index": "kb_nutrition"
   },
-  
   "exercise": {
     "leaflets": [
       "bcc6-excercises-after-breast-cancer-surgery-web-pdf.pdf",
-      "bbc15-reducing-the-risk-of-lymphoedema-web-pdf.pdf",
-      "bcc169-after-breast-cancer-what-now-2025-web.pdf"
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf"
     ],
     "kb_index": "kb_exercise"
   },
-  
-  "clothing": {
-    "leaflets": [
-      "bcc123-breast-prostheses-bras-and-clothes-web-pdf.pdf",
-      "bcc196-your-guide-to-a-well-fitting-bra-web.pdf"
-    ],
-    "kb_index": "kb_clothing"
-  },
-  
   "emotional_support": {
     "leaflets": [
       "bcc110-your-body-intimacy-and-sex-web-v2.pdf",
-      "bcc120-when-your-partner-has-breast-cancer-web-pdf.pdf",
-      "caring-for-someone-with-sbc-web-pdf.pdf",
-      "bcn400-support-for-you-primary.pdf"
+      "MAC12515_Physical+activity_E06_IntPDF_02.pdf",
+      "bcc161-understanding-your-results-web.pdf",
+      "bcc18-menopausal-symptoms-and-breast-cancer-2023-web-pdf.pdf",
+      "bcc197-moving-forward-web-pdf.pdf",
+      "MAC14215+Worrying+about+cancer+coming+back+E04+Interactive+PDF.pdf"
     ],
     "kb_index": "kb_emotional_support"
   },
-  
+  "clothing": {
+    "leaflets": [
+      "bcc123-breast-prostheses-bras-and-clothes-web-pdf.pdf"
+    ],
+    "kb_index": "kb_clothing"
+  },
   "diagnosis_testing": {
     "leaflets": [
-      "bcc70-your-breast-clinic-appointment-web.pdf",
-      "bcc161-understanding-your-results-web.pdf",
-      "bcc44-diagnosed-with-breast-cancer-what-now-web.pdf",
+      "invasive-breast-cancer-nst-bcc210-web.pdf",
+      "bcn255-easy-read-diagnosed-with-primary-breast-cancer-web-pdf.pdf",
+      "bcn248-triple-negative-breast-cancer-web-pdf.pdf",
+      "bcc45-invasive-lobular-breast-cancer-web-pdf.pdf",
+      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
       "bcc39-dcis-web.pdf",
-      "bcc72-fibroadenoma-web-2025.pdf",
-      "bcc73-breast-cysts-web-pdf.pdf",
-      "bcc77-breast-calcifications-web.pdf",
-      "bcc78-hyperplasia-and-atypical-hyperplasia-2025-web.pdf",
-      "bcc126-lobular-neoplasia-web-pdf.pdf"
+      "bcc23-inflammatory-breast-cancer-web-2025-new-address.pdf"
     ],
     "kb_index": "kb_diagnosis_testing"
   },
-  
   "admin_logistics": {
-    "leaflets": [
-      "bcc70-your-breast-clinic-appointment-web.pdf",
-      "bcn704-about-breast-cancer-now-leaflet-2023-web.pdf"
-    ],
+    "leaflets": [],
     "kb_index": "kb_admin_logistics"
   },
-  
   "safety_red_flags": {
     "leaflets": [
-      "bcn002_possible_signs_of_secondary_breast_cancer.pdf",
-      "bcn003-signs-and-symptoms-of-breast-cancer-recurrence-infographic-web.pdf",
-      "bcn258-signs-and-symptoms-of-secondary-breast-cancer-progression-2023-web.pdf",
-      "bcc30-secondary-breast-cancer-in-the-bone-web.pdf",
-      "bcc36-secondary-breast-cancer-in-liver-2023-web-pdf.pdf",
-      "bcc40-secondary-breast-cancer-in-the-lung-web.pdf",
-      "bcc56-secondary-breast-cancer-in-the-brain-web-pdf.pdf"
+      "2024_Your_treatment_record_web_1.pdf"
     ],
     "kb_index": "kb_safety_red_flags"
   },
-  
   "statistics": {
-    "leaflets": [
-      "bcc4-treating-primary-breast-cancer-web-pdf.pdf",
-      "bcn240-reducing-your-risk-of-breast-cancer-web.pdf",
-      "bcn244-family-history-web.pdf"
-    ],
+    "leaflets": [],
     "kb_index": "kb_statistics"
   },
-  
   "unknown": {
     "leaflets": [],
     "kb_index": "breast_cancer_knowledge"
   }
 }
-

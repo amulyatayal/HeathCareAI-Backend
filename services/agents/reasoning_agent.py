@@ -10,7 +10,9 @@ from typing import Optional, Dict, Any
 
 from services.agents.base_agent import BaseAgent, AgentError
 from services.agents.retrieval_agent import format_chunks_for_prompt, get_citations_from_chunks
-from services.agents.stage_agent import get_stage_guidelines
+from services.agents.base_agent import BaseAgent
+from services.agents.retrieval_agent import RetrievalAgent
+from services.patient_stage_service import get_stage_guidelines
 from models.schemas import (
     PipelineContext,
     ReasoningResult,
@@ -194,7 +196,7 @@ class ReasoningAgent(BaseAgent):
         try:
             # Build the prompts
             system_prompt = self._build_system_prompt(context)
-            user_prompt = self._build_user_prompt(context)
+            user_prompt = await self._build_user_prompt(context)
             
             # Generate response
             response_text = await self.invoke_llm(
@@ -317,9 +319,9 @@ class ReasoningAgent(BaseAgent):
             disclaimer_instruction=disclaimer_instruction
         )
     
-    def _build_user_prompt(self, context: PipelineContext) -> str:
+    async def _build_user_prompt(self, context: PipelineContext) -> str:
         """Build the user prompt with question and context."""
-        # Get stage info
+        # Get basic stage info
         stage = PatientStage.UNKNOWN
         stage_certainty = "unknown"
         if context.stage_result:
@@ -328,13 +330,47 @@ class ReasoningAgent(BaseAgent):
         
         # Build stage context
         stage_context = ""
-        if context.stage_result and context.stage_result.signals:
-            stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+        
+        try:
+             # Use PatientStageService for RAG context
+            from services.patient_stage_service import get_patient_stage_service
+            stage_service = get_patient_stage_service()
+            
+            target_stage_id = None
+            
+            # 1. Prefer explicit override from metadata (e.g. detailed navigation)
+            if hasattr(context, 'metadata') and context.metadata and context.metadata.get('detailed_stage_id'):
+                target_stage_id = context.metadata.get('detailed_stage_id')
+                
+            # 2. Fallback to user profile if authenticated
+            elif context.user_id:
+                from services.patient_profile_service import get_patient_profile_service
+                profile_service = get_patient_profile_service()
+                # Async get_profile
+                profile = await profile_service.get_profile(context.user_id)
+                if profile:
+                    target_stage_id = profile.current_stage_id
+            
+            # 3. If we have a target ID, get the rich context
+            if target_stage_id:
+                stage_context = stage_service.get_rag_context(target_stage_id)
+            else:
+                # 4. Fallback to signal string if no specific stage ID
+                if context.stage_result and context.stage_result.signals:
+                    stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+                    
+        except Exception as e:
+            logger.warning(f"Stage context generation failed: {e}")
+            if context.stage_result and context.stage_result.signals:
+                stage_context = f"Stage signals: {', '.join(context.stage_result.signals)}"
+        
+        # Determine certainty string
+        certainty_str = stage_certainty.value if hasattr(stage_certainty, 'value') else str(stage_certainty)
         
         return REASONING_USER_TEMPLATE.format(
             question=context.user_message,
             stage=stage,
-            stage_certainty=stage_certainty,
+            stage_certainty=certainty_str,
             stage_context=stage_context
         )
     
