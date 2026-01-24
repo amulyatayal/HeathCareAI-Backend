@@ -49,8 +49,6 @@ RESPONSE GUIDELINES:
 EVIDENCE CONTEXT:
 {evidence_context}
 
-{video_suggestions_section}
-
 IMPORTANT RULES (STRICT MODE - Evidence Only):
 1. Base your response ONLY on the provided evidence. Do not make up information.
 2. If the evidence is insufficient, acknowledge limitations and suggest consulting the care team.
@@ -58,7 +56,6 @@ IMPORTANT RULES (STRICT MODE - Evidence Only):
 4. Be empathetic and supportive in tone.
 5. Include specific citations when referencing sources (e.g., "According to [Source 1]...").
 6. For medical information, always recommend consulting healthcare providers for personalized advice.
-7. If relevant videos are provided, include a brief "Suggested Videos" section at the end of your response (before the disclaimer) listing the most relevant videos.
 {additional_rules}
 
 {disclaimer_instruction}"""
@@ -72,8 +69,6 @@ RESPONSE GUIDELINES:
 EVIDENCE CONTEXT (if available):
 {evidence_context}
 
-{video_suggestions_section}
-
 IMPORTANT RULES (FLEXIBLE MODE):
 1. Use the provided evidence when available, citing sources appropriately.
 2. You MAY supplement with your general knowledge for this topic category.
@@ -81,7 +76,6 @@ IMPORTANT RULES (FLEXIBLE MODE):
 4. Use clear, accessible language appropriate for patients.
 5. Be empathetic and supportive in tone.
 6. For any medical-adjacent advice, recommend consulting healthcare providers.
-7. If relevant videos are provided, include a brief "Suggested Videos" section at the end of your response (before the disclaimer) listing the most relevant videos.
 {additional_rules}
 
 {disclaimer_instruction}"""
@@ -271,7 +265,7 @@ class ReasoningAgent(BaseAgent):
             f"- Avoid: {stage_info.get('avoid', 'making assumptions')}"
         )
         
-        # Format evidence
+        # Format evidence (PDF sources only - videos are shown separately in UI)
         evidence_context = "No evidence retrieved from knowledge base."
         if context.retrieval_result and context.retrieval_result.chunks:
             evidence_context = format_chunks_for_prompt(
@@ -279,8 +273,8 @@ class ReasoningAgent(BaseAgent):
                 max_chars=6000  # Leave room for rest of prompt
             )
         
-        # Format video suggestions
-        video_suggestions_section = self._format_video_suggestions(context)
+        # Note: Video suggestions are NOT included in prompt - they appear in UI only
+        # This ensures the answer text only references approved PDF content
         
         # Add intent-specific rules
         additional_rules = self._get_additional_rules(context)
@@ -319,42 +313,9 @@ class ReasoningAgent(BaseAgent):
             agent_prompt=self.base_prompt,
             stage_guidelines=stage_guidelines,
             evidence_context=evidence_context,
-            video_suggestions_section=video_suggestions_section,
             additional_rules=additional_rules,
             disclaimer_instruction=disclaimer_instruction
         )
-    
-    def _format_video_suggestions(self, context: PipelineContext) -> str:
-        """Format video suggestions for inclusion in the prompt."""
-        if not context.video_retrieval_result or not context.video_retrieval_result.videos:
-            return ""
-        
-        videos = context.video_retrieval_result.videos[:3]  # Top 3 videos
-        if not videos:
-            return ""
-        
-        video_parts = ["SUGGESTED VIDEOS (include if relevant to the question):"]
-        
-        for i, video in enumerate(videos, 1):
-            # Format timestamp
-            timestamp_str = ""
-            if video.timestamp_start:
-                mins, secs = divmod(video.timestamp_start, 60)
-                timestamp_str = f" (starts at {mins}:{secs:02d})"
-            
-            # Truncate excerpt
-            excerpt = video.transcript_excerpt[:200] if video.transcript_excerpt else ""
-            if len(video.transcript_excerpt or "") > 200:
-                excerpt += "..."
-            
-            video_parts.append(
-                f"\n{i}. {video.video_title}{timestamp_str}\n"
-                f"   URL: {video.timestamped_url or video.video_url}\n"
-                f"   Channel: {video.channel_name or 'Unknown'}\n"
-                f"   Relevant excerpt: \"{excerpt}\""
-            )
-        
-        return "\n".join(video_parts)
     
     def _build_user_prompt(self, context: PipelineContext) -> str:
         """Build the user prompt with question and context."""

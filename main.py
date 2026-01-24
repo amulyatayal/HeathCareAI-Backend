@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events"""
     # Startup
     logger.info("=" * 60)
-    logger.info("🏥 Healthcare Companion AI Backend Starting...")
+    logger.info("Healthcare Companion AI Backend Starting...")
     logger.info(f"   Environment: {settings.app_env}")
     logger.info(f"   Debug Mode: {settings.debug}")
     logger.info(f"   API Prefix: {settings.api_prefix}")

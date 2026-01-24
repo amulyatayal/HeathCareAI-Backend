@@ -376,6 +376,10 @@ class KnowledgeBaseService:
                           'should', 'would', 'could', 'will', 'be', 'have', 'has'}
             query_keywords = query_keywords - stop_words
             
+            # Keyword search fields: include video_title for YouTube index to improve relevance
+            is_video_index = "youtube" in (self.index_name or "").lower()
+            mm_fields = ["content^2", "video_title^2"] if is_video_index else ["content^2", "section"]
+            
             # Build hybrid search query for chunks
             hybrid_query = {
                 "size": limit * 2,  # Get extra for filtering
@@ -395,7 +399,7 @@ class KnowledgeBaseService:
                             {
                                 "multi_match": {
                                     "query": query,
-                                    "fields": ["content^2", "section"],
+                                    "fields": mm_fields,
                                     "type": "best_fields",
                                     "boost": KEYWORD_WEIGHT / VECTOR_WEIGHT
                                 }
@@ -424,9 +428,12 @@ class KnowledgeBaseService:
                 score = hit.get("_score", 0.0)
                 content = source.get("content", "")
                 
-                # Check for keyword match
+                # Check for keyword match (content; for video index also check title)
                 content_lower = content.lower()
                 has_keyword_match = any(kw in content_lower for kw in query_keywords)
+                if not has_keyword_match and is_video_index:
+                    title_lower = (source.get("video_title") or "").lower()
+                    has_keyword_match = any(kw in title_lower for kw in query_keywords)
                 
                 if has_keyword_match:
                     keyword_match_found = True
