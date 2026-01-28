@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Run all verification tests
-echo "Running Integration Tests..."
+# Run stage-related integration tests
+echo "Running Stage Integration Tests..."
+
+# Navigate to project root
+cd "$(dirname "$0")/../.."
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 # Run specific integration test

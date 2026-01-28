@@ -7,14 +7,14 @@ This table stores patient profile information including:
 - Onboarding completion status
 - Explicit medical journey data
 
-Run with: python scripts/create_patient_profiles_table.py
+Run with: python scripts/db/create_patient_profiles_table.py
 """
 
 import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import boto3
 from botocore.exceptions import ClientError

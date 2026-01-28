@@ -141,7 +141,16 @@ class VideoRetrievalAgent(BaseAgent):
                     logger.warning(f"VideoRetrievalAgent: First chunk missing video_id! document_id={raw_chunks[0].get('document_id')}")
             
             # Filter for relevance before processing (use intent for topic-specific matching)
-            intent = context.intent_result.intent if context.intent_result else IntentCategory.UNKNOWN
+            # Note: intent_result.intent may be a string (due to use_enum_values=True) or enum
+            intent_raw = context.intent_result.intent if context.intent_result else IntentCategory.UNKNOWN
+            # Convert string to IntentCategory enum if needed
+            if isinstance(intent_raw, str):
+                try:
+                    intent = IntentCategory(intent_raw)
+                except ValueError:
+                    intent = IntentCategory.UNKNOWN
+            else:
+                intent = intent_raw
             filtered_chunks = self._filter_relevant_chunks(raw_chunks, context.user_message, intent)
             logger.info(f"VideoRetrievalAgent: Filtered to {len(filtered_chunks)} relevant chunks (from {len(raw_chunks)})")
             

@@ -1,11 +1,21 @@
+"""
+Integration test for orchestrator stage confirmation flow (loop prevention).
+
+Tests scenarios:
+1. Mismatch detection - bot asks confirmation when stage differs
+2. User confirms "Yes" - profile is updated
+3. User ignores - profile is NOT updated
+"""
+
 import asyncio
 import sys
 import logging
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from dotenv import load_dotenv
 
 # Setup path and env
-sys.path.insert(0, '.')
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 load_dotenv()
 
 # Logger

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -257,7 +257,7 @@ async def main():
     # Get absolute path
     file_path = Path(args.file)
     if not file_path.is_absolute():
-        script_dir = Path(__file__).parent.parent
+        script_dir = Path(__file__).parent.parent.parent
         file_path = script_dir / args.file
     
     if not file_path.exists():

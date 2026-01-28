@@ -23,7 +23,7 @@ except ImportError:
     import PyPDF2
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -281,13 +281,13 @@ async def main():
     args = parser.parse_args()
     
     # Configuration
-    DATA_DIR = Path(__file__).parent.parent / "data" / "sample" / "raw"
+    DATA_DIR = Path(__file__).parent.parent.parent / "data" / "sample" / "raw"
     
     # Output file
     if args.output:
-        OUTPUT_FILE = Path(__file__).parent.parent / "data" / args.output
+        OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / args.output
     else:
-        OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ProcessedQ&A_Generated.csv"
+        OUTPUT_FILE = Path(__file__).parent.parent.parent / "data" / "ProcessedQ&A_Generated.csv"
     
     # Get PDF files
     if args.file:
@@ -373,4 +373,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

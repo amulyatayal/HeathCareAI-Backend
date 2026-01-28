@@ -6,16 +6,16 @@ Creates TWO answer variants per question:
 
 Usage:
   # Generate Q&A for a single intent (for testing)
-  python scripts/generate_intent_qa.py --intent medication_info
+  python scripts/kb-preprocessing/generate_intent_qa.py --intent medication_info
   
   # Generate Q&A for all intents
-  python scripts/generate_intent_qa.py --all
+  python scripts/kb-preprocessing/generate_intent_qa.py --all
   
   # Dry run (no indexing)
-  python scripts/generate_intent_qa.py --intent medication_info --dry-run
+  python scripts/kb-preprocessing/generate_intent_qa.py --intent medication_info --dry-run
   
   # Ingest existing Q&A file to OpenSearch (without regenerating)
-  python scripts/generate_intent_qa.py --intent cancer_treatment --ingest-only
+  python scripts/kb-preprocessing/generate_intent_qa.py --intent cancer_treatment --ingest-only
 """
 
 import sys
@@ -37,7 +37,7 @@ except ImportError:
     import PyPDF2
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -53,10 +53,10 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ================================
 
-DATA_DIR = Path(__file__).parent.parent / "data" / "sample" / "raw" / "Leaflets"
-MAPPING_FILE = Path(__file__).parent.parent / "config" / "intent_leaflets_mapping.json"
-URL_MAPPING_FILE = Path(__file__).parent.parent / "data" / "leaflets_URL_mapping.csv"
-OUTPUT_DIR = Path(__file__).parent.parent / "data" / "intent_qa"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "sample" / "raw" / "Leaflets"
+MAPPING_FILE = Path(__file__).parent.parent.parent / "config" / "intent_leaflets_mapping.json"
+URL_MAPPING_FILE = Path(__file__).parent.parent.parent / "data" / "leaflets_URL_mapping.csv"
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "data" / "intent_qa"
 
 # Ensure output directory exists
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -787,9 +787,9 @@ async def main():
     if not args.intent and not args.all:
         parser.print_help()
         logger.info("\nExamples:")
-        logger.info("  python scripts/generate_intent_qa.py --intent medication_info --dry-run")
-        logger.info("  python scripts/generate_intent_qa.py --all")
-        logger.info("  python scripts/generate_intent_qa.py --intent cancer_treatment --ingest-only")
+        logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent medication_info --dry-run")
+        logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --all")
+        logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent cancer_treatment --ingest-only")
         return
     
     # Handle ingest-only mode
@@ -857,4 +857,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

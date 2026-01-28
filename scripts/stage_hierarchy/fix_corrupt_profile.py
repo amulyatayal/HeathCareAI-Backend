@@ -1,6 +1,14 @@
+"""
+Utility script to fix/delete corrupt patient profiles.
+"""
 
 import asyncio
 import os
+import sys
+
+# Setup path for imports - adjust for new location
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from services.patient_profile_service import PatientProfileService, get_patient_profile_service
 
 USER_ID = "103030615691229126949"

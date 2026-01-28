@@ -58,3 +58,10 @@ Option 2: Hormone Therapy and Zoledronic Acid
 ,,9.1,,,,Adjuvant endocrine therapy only,Hormone therapy after Surgery only,,"Endocrine therapy is indicated in patients with estrogen receptor positive breast cancer.",9,5,completion of all treatment,
 ,,9.2,,,,Adjuvant endocrine therapy and Zoledronic acid,Hormone therapy after Surgery and Zoledronic acid (Zometa) treatment,,"In postmenopausal women, zoledronic acid is indicated in combination with endocrine therapy to improve survival by inhibiting bone breakdown.",9,5,completion of all treatment,
 10,,,,,,Adjuvant Zoledronic acid (Zometa),Zoledronic acid (Zometa) therapy after Surgery,,"In postmenopausal women, zoledronic acid is indicated to improve survival by inhibiting bone breakdown. Often given in combination with endocrine therapy.",2,5,completion of treatment,
+,,,,,,,,,,,,,
+,,,,,,,,,,,,,
+Tenets,,,,,,"1. A patient should one and only one stages at any given point in time. 
+2. There should always be a previous stage and a next stage, unless there it's a <start> or and <End of Pathways> Stage
+3. The description should be elaborate in a way - with the Text we shuold be able to uniquely map a stage for the patient by either patient inputs or reports uploaded. ",,,,,,,
+,,,,,,,,,,,,,
+Notes,,,,,,,,,,,,,

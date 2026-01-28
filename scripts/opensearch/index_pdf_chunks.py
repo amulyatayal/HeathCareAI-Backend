@@ -30,7 +30,7 @@ except ImportError:
     import PyPDF2
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -359,7 +359,7 @@ async def main():
     args = parser.parse_args()
     
     # Configuration
-    script_dir = Path(__file__).parent.parent
+    script_dir = Path(__file__).parent.parent.parent
     data_dir = script_dir / args.data_dir
     index_name = args.index
     
@@ -423,4 +423,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

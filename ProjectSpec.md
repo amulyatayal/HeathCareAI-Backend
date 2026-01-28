@@ -1,13 +1,14 @@
 
 # Patient Education Multi-Agent System — Requirements Specification
 
-**Version:** 1.2
+**Version:** 1.3
 **Status:** Canonical (single source of truth)
 **Audience:** Engineers, Cursor, AI Platform
 **Domain:** Patient-facing medical education (non-clinical)
-**Last Updated:** January 14, 2026
+**Last Updated:** January 23, 2026
 
 ### Changelog
+- v1.3: Added citation-only mode, clickable source URLs, show_sources flag, video retrieval agent, Q&A knowledge bases
 - v1.2: Added KB integration, thresholds, error handling, performance optimization, extended logging
 - v1.1: Expanded agent_map with knowledge_base and model routing
 - v1.0: Initial specification
@@ -67,22 +68,29 @@ Violating any invariant = non-compliant implementation.
 ```
 User Query
    ↓
-Intent Extraction Agent
+┌──────────────────────────────┐
+│  PHASE 1: Classification     │
+│  Intent Agent + Stage Agent  │  ← Run in parallel
+└──────────────────────────────┘
    ↓
 (Clarification if needed)
    ↓
-Patient Stage Identification Agent
+┌──────────────────────────────┐
+│  PHASE 2: Retrieval          │
+│  Document KB + Video KB      │  ← Run in parallel
+└──────────────────────────────┘
    ↓
 Category-Specific Reasoning Agent
    ↓
 Inference Validator / Guardrails Agent
    ↓
-Final Response
+Final Response (+ Video Suggestions)
 ```
 
 * Agents never call each other
 * Agents never store state
 * Orchestrator controls all flow
+* Citation-only intents return verbatim quotes with clickable sources
 
 ---
 
@@ -516,6 +524,21 @@ function answerPatientQuestion(query, sessionContext?) {
       "content_type": "PDF chunks with page references",
       "use_cases": ["medication", "treatment", "side_effects", "symptoms"]
     },
+    "kb_cancer_treatment": {
+      "description": "Pre-generated Q&A pairs for cancer treatment topics",
+      "content_type": "Q&A with source URLs and citations",
+      "use_cases": ["cancer_treatment", "chemotherapy", "radiotherapy"]
+    },
+    "kb_statistics": {
+      "description": "Statistics Q&A with contextual explanations",
+      "content_type": "Q&A pairs focused on survival rates and risk factors",
+      "use_cases": ["statistics", "prognosis", "research"]
+    },
+    "youtube_transcripts": {
+      "description": "YouTube video transcripts from trusted channels",
+      "content_type": "Video transcript chunks with timestamps",
+      "use_cases": ["video_suggestions", "patient_stories", "educational_videos"]
+    },
     "nutrition_assistant": {
       "description": "Recipes and dietary advice for patients",
       "content_type": "Structured recipes and nutrition guidance",
@@ -564,6 +587,140 @@ interface PathwayKnowledgeBase {
 ```
 
 Pathway-specific filtering is a future enhancement.
+
+### 13.5 Per-Intent Knowledge Bases (Q&A)
+
+Intent-specific knowledge bases contain pre-generated Q&A pairs for improved accuracy:
+
+```json
+{
+  "intent_knowledge_bases": {
+    "cancer_treatment": {
+      "index": "kb_cancer_treatment",
+      "content_type": "Q&A pairs with citations",
+      "leaflets": ["chemotherapy", "radiotherapy", "surgery", "hormone therapy"]
+    },
+    "statistics": {
+      "index": "kb_statistics", 
+      "content_type": "Q&A pairs with context",
+      "leaflets": ["survival rates", "risk factors", "family history"]
+    }
+  }
+}
+```
+
+Each Q&A document includes:
+- `question`: The question text
+- `answer`: Generated or verbatim answer
+- `answer_type`: "generated" or "citation_only"
+- `source_url`: Clickable link to source document
+- `source_name`: Display name of the source
+- `page_start` / `page_end`: Page references
+
+---
+
+## 13.6 Citation-Only Mode
+
+For medical-critical intents, responses use **verbatim quotes only** (no paraphrasing).
+
+### 13.6.1 Citation-Only Intents
+
+```json
+{
+  "citation_only_intents": [
+    "symptoms",
+    "surgery_procedures", 
+    "drains_wound_care",
+    "cancer_treatment",
+    "medication_info",
+    "side_effects",
+    "pre_surgery_prehab",
+    "post_surgery_recovery",
+    "follow_up_care",
+    "diagnosis_testing",
+    "safety_red_flags"
+  ]
+}
+```
+
+### 13.6.2 Citation Format
+
+Citations are formatted as styled blockquotes with clickable source links:
+
+```markdown
+> "Verbatim quote from the source document..."
+>
+> — [📄 Source Name, p.5](https://source-url.pdf)
+```
+
+### 13.6.3 Response Structure
+
+```ts
+interface PipelineResponse {
+  // ... existing fields ...
+  show_sources: boolean;  // false for citation-only intents
+  citations: Citation[];
+}
+
+interface Citation {
+  source_file: string;
+  source_url?: string;    // Clickable URL
+  section?: string;
+  page_start?: number;
+  page_end?: number;
+  relevance_score: number;
+}
+```
+
+When `show_sources: false`, the frontend should hide the "Sources Consulted" section (sources are already embedded in the response as blockquotes).
+
+---
+
+## 13.7 Video Retrieval Agent
+
+Retrieves relevant YouTube video suggestions from the video knowledge base.
+
+### 13.7.1 Video Knowledge Base
+
+```json
+{
+  "youtube_transcripts": {
+    "index": "youtube_transcripts",
+    "content_type": "Video transcript chunks",
+    "fields": ["video_id", "video_title", "video_url", "channel", "timestamped_url"]
+  }
+}
+```
+
+### 13.7.2 Video Suggestion Output
+
+```ts
+interface SuggestedVideo {
+  video_id: string;
+  title: string;
+  url: string;              // With timestamp if available
+  channel_name?: string;
+  relevance_note?: string;
+  timestamp_seconds?: number;
+}
+```
+
+### 13.7.3 Pipeline Integration
+
+Video retrieval runs in parallel with document retrieval:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  PHASE 2: Retrieval (PARALLEL)                          │
+│  ┌──────────────┐   ┌─────────────────┐                │
+│  │  Retrieval   │   │ VideoRetrieval  │                │
+│  │    Agent     │   │     Agent       │ ← YouTube KB   │
+│  └──────┬───────┘   └────────┬────────┘                │
+│         └────────┬───────────┘                          │
+└──────────────────┼──────────────────────────────────────┘
+```
+
+Video suggestions are NOT included in the LLM prompt—they appear in the UI only.
 
 ---
 

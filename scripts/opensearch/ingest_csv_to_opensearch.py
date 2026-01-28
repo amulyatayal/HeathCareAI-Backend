@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -211,7 +211,7 @@ async def main():
     args = parser.parse_args()
     
     # Get absolute path
-    script_dir = Path(__file__).parent.parent
+    script_dir = Path(__file__).parent.parent.parent
     file_path = script_dir / args.file
     
     if not file_path.exists():
@@ -249,4 +249,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

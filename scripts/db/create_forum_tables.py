@@ -8,14 +8,14 @@ Tables created:
 - ForumVotes: Tracks user votes on posts and comments
 - ForumUserProfiles: User karma and stats (optional)
 
-Run with: python scripts/create_forum_tables.py
+Run with: python scripts/db/create_forum_tables.py
 """
 
 import sys
 import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import boto3
 from botocore.exceptions import ClientError
@@ -231,4 +231,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

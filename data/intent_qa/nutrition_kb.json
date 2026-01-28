@@ -1,0 +1,965 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-01-28T00:45:15.128452",
+  "generator": "generate_nutrition_kb.py",
+  "source": "LLM-generated based on oncology nutrition guidelines",
+  "statistics": {
+    "total_recipes": 8,
+    "total_advice": 10,
+    "cuisines_covered": [
+      "indian",
+      "mediterranean"
+    ],
+    "stages_covered": [
+      "3",
+      "5"
+    ]
+  },
+  "recipes": [
+    {
+      "title": "Turmeric Ginger Chicken Curry",
+      "meal_type": "dinner",
+      "cuisine_type": "indian",
+      "description": "A comforting, anti-inflammatory curry that's easy to digest and provides protein and calories to help maintain weight during chemotherapy.",
+      "dietary_tags": [
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "low_salt",
+        "high_protein",
+        "high_calorie"
+      ],
+      "symptom_support": [
+        "nausea",
+        "fatigue",
+        "taste_changes",
+        "appetite_loss",
+        "weight_loss"
+      ],
+      "texture_class": "regular",
+      "nutrition": {
+        "calories_per_serving": 450,
+        "protein_g": 35,
+        "fiber_g": 5,
+        "fat_g": 18,
+        "carbs_g": 35,
+        "sugar_g": 5,
+        "sodium_mg": 350
+      },
+      "servings": 4,
+      "prep_time_mins": 20,
+      "cook_time_mins": 45,
+      "ingredients": [
+        "1 lb boneless, skinless chicken thighs, cubed",
+        "2 tablespoons olive oil",
+        "1 onion, diced",
+        "3 cloves garlic, minced",
+        "2 tablespoons grated fresh ginger",
+        "2 teaspoons ground turmeric",
+        "1 teaspoon ground cumin",
+        "1 teaspoon ground coriander",
+        "1 cup low-sodium chicken broth",
+        "1 (14 oz) can coconut milk",
+        "1 tablespoon lime juice",
+        "Salt and pepper to taste",
+        "Chopped cilantro for garnish"
+      ],
+      "instructions": [
+        "In a large skillet, heat the olive oil over medium heat.",
+        "Add the onion and sauté for 5 minutes until translucent.",
+        "Add the garlic, ginger, turmeric, cumin, and coriander. Cook for 2 minutes, stirring constantly, until fragrant.",
+        "Add the chicken and stir to coat with the spices. Cook for 5 minutes, until the chicken is lightly browned.",
+        "Pour in the chicken broth and coconut milk. Bring to a simmer and cook for 20-25 minutes, until the chicken is cooked through and the sauce has thickened.",
+        "Stir in the lime juice and season with salt and pepper to taste.",
+        "Serve hot, garnished with chopped cilantro. Enjoy over steamed basmati rice."
+      ],
+      "clinical_notes": "This curry is rich in anti-inflammatory spices like turmeric and ginger, which can help manage nausea and taste changes. The coconut milk provides calories and healthy fats, while the chicken offers lean protein to support muscle maintenance. The soft texture and gentle flavors make it easy to digest during chemotherapy.",
+      "allergen_info": "None",
+      "tips": "For patients with a poor appetite, consider serving smaller portions more frequently. You can also blend the curry into a soup or sauce consistency if chewing is difficult.",
+      "recipe_id": "2ed1e6cc-2166-4c9e-b110-fc6100da4b9e",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:07.835733",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Soothing Masala Khichdi",
+      "meal_type": "lunch",
+      "cuisine_type": "indian",
+      "description": "A comforting, easy-to-digest rice and lentil porridge that provides complex carbs, fiber, and protein to nourish patients during chemotherapy.",
+      "dietary_tags": [
+        "vegetarian",
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "low_salt",
+        "high_fiber",
+        "high_protein"
+      ],
+      "symptom_support": [
+        "nausea",
+        "fatigue",
+        "mouth_sores",
+        "constipation",
+        "diarrhea",
+        "appetite_loss"
+      ],
+      "texture_class": "soft",
+      "nutrition": {
+        "calories_per_serving": 380,
+        "protein_g": 15,
+        "fiber_g": 8,
+        "fat_g": 8,
+        "carbs_g": 60,
+        "sugar_g": 5,
+        "sodium_mg": 300
+      },
+      "servings": 4,
+      "prep_time_mins": 15,
+      "cook_time_mins": 30,
+      "ingredients": [
+        "1 cup basmati rice, rinsed",
+        "1/2 cup split yellow moong dal (or red lentils), rinsed",
+        "1 tablespoon ghee or olive oil",
+        "1 teaspoon cumin seeds",
+        "1 bay leaf",
+        "1 inch cinnamon stick",
+        "3 cloves",
+        "4 cups water or low-sodium vegetable broth",
+        "1 teaspoon ground turmeric",
+        "1 teaspoon ground coriander",
+        "1 teaspoon ground cumin",
+        "Salt to taste",
+        "Chopped cilantro for garnish"
+      ],
+      "instructions": [
+        "In a large pot, heat the ghee or oil over medium heat.",
+        "Add the cumin seeds, bay leaf, cinnamon stick, and cloves. Cook for 1-2 minutes until fragrant.",
+        "Add the rinsed rice and lentils. Sauté for 2-3 minutes.",
+        "Pour in the water or broth and stir in the turmeric, coriander, and cumin.",
+        "Bring the mixture to a boil, then reduce heat to low, cover, and simmer for 25-30 minutes, stirring occasionally, until the rice and lentils are very soft and porridge-like.",
+        "Season with salt to taste.",
+        "Serve hot, garnished with chopped cilantro."
+      ],
+      "clinical_notes": "Khichdi is a classic Indian comfort food that's easy on the digestive system, making it an excellent choice for chemotherapy patients dealing with nausea, mouth sores, and other GI side effects. The combination of rice and lentils provides complex carbs, fiber, and plant-based protein to help maintain weight and energy levels. The warming spices like turmeric and cumin also have anti-inflammatory properties.",
+      "allergen_info": "None",
+      "tips": "For patients with poor appetite, try serving smaller portions more frequently. You can also blend the khichdi into a smoother texture if chewing is difficult. Add extra broth or water to thin it out as needed.",
+      "recipe_id": "accee247-459e-44fe-abe2-bb088e1dc9b0",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:07.835764",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Chickpea and Vegetable Curry",
+      "meal_type": "dinner",
+      "cuisine_type": "indian",
+      "description": "This flavorful and nourishing curry is packed with protein, fiber, and anti-inflammatory spices to support long-term health and cancer prevention. The soft texture is easy to digest.",
+      "dietary_tags": [
+        "vegetarian",
+        "vegan",
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "soy_free",
+        "egg_free",
+        "halal",
+        "kosher",
+        "low_salt",
+        "high_fiber",
+        "high_protein",
+        "anti_inflammatory"
+      ],
+      "symptom_support": [
+        "fatigue",
+        "weight_management"
+      ],
+      "texture_class": "soft",
+      "nutrition": {
+        "calories_per_serving": 350,
+        "protein_g": 18,
+        "fiber_g": 12,
+        "fat_g": 12,
+        "carbs_g": 45,
+        "sugar_g": 8,
+        "sodium_mg": 320
+      },
+      "servings": 4,
+      "prep_time_mins": 20,
+      "cook_time_mins": 30,
+      "ingredients": [
+        "1 cup cooked chickpeas",
+        "2 cups mixed vegetables (diced carrots, bell peppers, spinach)",
+        "1 onion, diced",
+        "3 cloves garlic, minced",
+        "1 tbsp grated ginger",
+        "1 tsp cumin",
+        "1 tsp coriander",
+        "1 tsp turmeric",
+        "1 tsp garam masala",
+        "1 cup low-sodium vegetable broth",
+        "1 cup full-fat coconut milk",
+        "2 tbsp lemon juice",
+        "Salt and pepper to taste"
+      ],
+      "instructions": [
+        "In a large pot, sauté the onion, garlic, and ginger in a little oil until fragrant.",
+        "Add the spices and cook for 1 minute, stirring constantly.",
+        "Pour in the vegetable broth and coconut milk, then add the chickpeas and vegetables.",
+        "Simmer for 20-25 minutes, until vegetables are tender.",
+        "Stir in the lemon juice and season with salt and pepper to taste.",
+        "Serve over basmati rice or with naan bread."
+      ],
+      "clinical_notes": "This curry is an excellent source of plant-based protein, fiber, and anti-inflammatory spices like turmeric. The soft texture is easy to digest, and the blend of vegetables provides a variety of nutrients to support long-term health and cancer prevention.",
+      "allergen_info": "None",
+      "tips": "For patients with a poor appetite, try serving smaller portions more frequently. If fatigue is an issue, prepare the curry in advance and reheat as needed.",
+      "recipe_id": "c7ba4498-24e2-4174-94fa-26fd68cbbd8f",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:44:19.697147",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Mango Lassi Smoothie",
+      "meal_type": "smoothie",
+      "cuisine_type": "indian",
+      "description": "This creamy, refreshing lassi smoothie is packed with vitamins, minerals, and anti-inflammatory properties from the mango, yogurt, and spices. It's a great way to boost nutrition and hydration, especially for patients struggling with appetite or weight management.",
+      "dietary_tags": [
+        "vegetarian",
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "soy_free",
+        "egg_free",
+        "halal",
+        "kosher",
+        "low_sugar",
+        "high_calorie"
+      ],
+      "symptom_support": [
+        "nausea",
+        "fatigue",
+        "appetite_loss",
+        "weight_loss"
+      ],
+      "texture_class": "liquid",
+      "nutrition": {
+        "calories_per_serving": 250,
+        "protein_g": 10,
+        "fiber_g": 3,
+        "fat_g": 6,
+        "carbs_g": 40,
+        "sugar_g": 25,
+        "sodium_mg": 80
+      },
+      "servings": 2,
+      "prep_time_mins": 10,
+      "cook_time_mins": 0,
+      "ingredients": [
+        "1 cup frozen mango chunks",
+        "1 cup plain Greek yogurt",
+        "1 cup unsweetened almond milk",
+        "1 tsp ground cardamom",
+        "1 tsp ground cinnamon",
+        "1 tbsp honey (optional)"
+      ],
+      "instructions": [
+        "Add all ingredients to a high-speed blender and blend until smooth and creamy.",
+        "Pour into glasses and enjoy immediately."
+      ],
+      "clinical_notes": "This mango lassi smoothie provides a nutrient-dense, high-calorie option that can help address common challenges like nausea, fatigue, and weight loss. The yogurt and spices also have anti-inflammatory properties to support long-term health.",
+      "allergen_info": "Contains dairy",
+      "tips": "For patients with a sensitive stomach, start with a smaller portion and gradually increase. The honey can be omitted if desired.",
+      "recipe_id": "4770e97b-7382-468b-93d4-dbe3be60e548",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:44:19.697248",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Mediterranean Baked Cod with Roasted Veggies",
+      "meal_type": "dinner",
+      "cuisine_type": "mediterranean",
+      "description": "This flavorful baked cod dish is packed with Mediterranean-inspired ingredients that are gentle on the stomach and provide essential nutrients during chemotherapy.",
+      "dietary_tags": [
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "low_salt",
+        "low_sugar",
+        "high_protein",
+        "high_fiber",
+        "anti_inflammatory"
+      ],
+      "symptom_support": [
+        "nausea",
+        "fatigue",
+        "mouth_sores",
+        "constipation",
+        "taste_changes",
+        "weight_loss"
+      ],
+      "texture_class": "regular",
+      "nutrition": {
+        "calories_per_serving": 350,
+        "protein_g": 30,
+        "fiber_g": 8,
+        "fat_g": 12,
+        "carbs_g": 25,
+        "sugar_g": 6,
+        "sodium_mg": 350
+      },
+      "servings": 4,
+      "prep_time_mins": 20,
+      "cook_time_mins": 35,
+      "ingredients": [
+        "1 lb cod fillets",
+        "2 cups mixed bell peppers, diced",
+        "1 cup zucchini, diced",
+        "1 cup cherry tomatoes, halved",
+        "1 onion, diced",
+        "2 tbsp olive oil",
+        "1 tsp dried oregano",
+        "1 tsp dried basil",
+        "1 tbsp lemon juice",
+        "Salt and pepper to taste"
+      ],
+      "instructions": [
+        "Preheat the oven to 400°F (200°C).",
+        "In a large baking dish, arrange the cod fillets and scatter the diced bell peppers, zucchini, cherry tomatoes, and onion around the fish.",
+        "Drizzle the olive oil over the vegetables and fish, and sprinkle with the dried oregano, basil, lemon juice, salt, and pepper.",
+        "Bake for 25-30 minutes, or until the fish is opaque and flakes easily with a fork.",
+        "Serve the baked cod and roasted vegetables warm."
+      ],
+      "clinical_notes": "This recipe is high in protein and fiber, which can help maintain weight and support digestion during chemotherapy. The Mediterranean-style ingredients and baking method are gentle on the stomach and provide anti-inflammatory benefits.",
+      "allergen_info": "None",
+      "tips": "For patients with mouth sores, you can puree the cooked vegetables to create a softer texture. Adjust seasoning to personal taste preferences.",
+      "recipe_id": "362e9b1b-93ce-434e-ae70-b25375f05b82",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:32.600027",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Mediterranean Vegetable and Lentil Soup",
+      "meal_type": "soup",
+      "cuisine_type": "mediterranean",
+      "description": "This nourishing and comforting Mediterranean-style vegetable and lentil soup is easy to digest, hydrating, and packed with essential nutrients to support patients during chemotherapy.",
+      "dietary_tags": [
+        "vegetarian",
+        "vegan",
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "soy_free",
+        "low_salt",
+        "high_protein",
+        "high_fiber",
+        "anti_inflammatory"
+      ],
+      "symptom_support": [
+        "nausea",
+        "fatigue",
+        "mouth_sores",
+        "dry_mouth",
+        "constipation",
+        "diarrhea",
+        "taste_changes",
+        "appetite_loss",
+        "weight_loss"
+      ],
+      "texture_class": "soft",
+      "nutrition": {
+        "calories_per_serving": 250,
+        "protein_g": 12,
+        "fiber_g": 10,
+        "fat_g": 5,
+        "carbs_g": 35,
+        "sugar_g": 8,
+        "sodium_mg": 350
+      },
+      "servings": 6,
+      "prep_time_mins": 25,
+      "cook_time_mins": 45,
+      "ingredients": [
+        "1 cup brown lentils, rinsed",
+        "1 onion, diced",
+        "3 garlic cloves, minced",
+        "2 carrots, diced",
+        "2 celery stalks, diced",
+        "1 zucchini, diced",
+        "1 can (14.5 oz) diced tomatoes",
+        "4 cups low-sodium vegetable broth",
+        "2 tsp dried oregano",
+        "1 tsp dried basil",
+        "1 bay leaf",
+        "Salt and pepper to taste",
+        "Chopped parsley for garnish (optional)"
+      ],
+      "instructions": [
+        "In a large pot, combine the rinsed lentils, diced onion, minced garlic, carrots, celery, and zucchini.",
+        "Add the diced tomatoes, vegetable broth, dried oregano, dried basil, and bay leaf. Season with salt and pepper.",
+        "Bring the soup to a boil, then reduce the heat and simmer for 30-40 minutes, or until the lentils and vegetables are tender.",
+        "Remove the bay leaf before serving.",
+        "Ladle the soup into bowls and garnish with chopped parsley, if desired."
+      ],
+      "clinical_notes": "This Mediterranean-inspired vegetable and lentil soup is a great option for breast cancer patients during chemotherapy. The lentils provide plant-based protein, while the vegetables and broth offer hydration and essential nutrients. The soft texture is gentle on the stomach and easy to digest, making it suitable for patients experiencing side effects like nausea, mouth sores, and dry mouth.",
+      "allergen_info": "None",
+      "tips": "For patients with difficulty swallowing, you can blend the soup to a smoother, pureed consistency. Adjust seasoning to personal taste preferences.",
+      "recipe_id": "cd237636-4729-4bda-afeb-795b15a0e0c9",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:32.600054",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Mediterranean Salmon and Vegetable Bake",
+      "meal_type": "dinner",
+      "cuisine_type": "mediterranean",
+      "description": "This easy one-pan bake features omega-3 rich salmon, fiber-filled vegetables, and Mediterranean herbs and spices. It's a nutritious and comforting meal that can help support long-term health and cancer prevention.",
+      "dietary_tags": [
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "low_salt",
+        "low_sugar",
+        "high_protein",
+        "high_fiber",
+        "anti_inflammatory"
+      ],
+      "symptom_support": [
+        "fatigue",
+        "weight_management"
+      ],
+      "texture_class": "regular",
+      "nutrition": {
+        "calories_per_serving": 375,
+        "protein_g": 35,
+        "fiber_g": 8,
+        "fat_g": 18,
+        "carbs_g": 18,
+        "sugar_g": 6,
+        "sodium_mg": 320
+      },
+      "servings": 4,
+      "prep_time_mins": 15,
+      "cook_time_mins": 30,
+      "ingredients": [
+        "4 (6 oz) salmon fillets",
+        "2 cups cherry tomatoes, halved",
+        "1 red onion, sliced",
+        "1 zucchini, sliced",
+        "1 bell pepper, sliced",
+        "2 tbsp olive oil",
+        "1 tsp dried oregano",
+        "1 tsp dried thyme",
+        "1/2 tsp garlic powder",
+        "1/4 tsp salt",
+        "1/4 tsp black pepper"
+      ],
+      "instructions": [
+        "Preheat oven to 400°F.",
+        "Arrange the salmon fillets, tomatoes, onion, zucchini, and bell pepper on a large baking sheet.",
+        "Drizzle with olive oil and sprinkle with oregano, thyme, garlic powder, salt, and pepper.",
+        "Bake for 20-25 minutes, until the salmon is cooked through and the vegetables are tender.",
+        "Serve immediately."
+      ],
+      "clinical_notes": "This recipe is high in omega-3 fatty acids, antioxidants, and fiber, which can support long-term health and cancer prevention. The Mediterranean-style flavors and one-pan preparation make it an easy, nutritious meal for patients who may be experiencing fatigue or weight management challenges.",
+      "allergen_info": "None",
+      "tips": "For patients with a poor appetite, try serving smaller portions or pairing this with a simple side salad.",
+      "recipe_id": "e4af52b5-d183-4b11-aac1-c6320e0f7520",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:44:44.180966",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "title": "Mediterranean Quinoa Stuffed Eggplant",
+      "meal_type": "dinner",
+      "cuisine_type": "mediterranean",
+      "description": "These Mediterranean-inspired stuffed eggplants are packed with fiber, protein, and anti-inflammatory ingredients to support long-term health and cancer prevention. The quinoa and vegetable filling provides a satisfying and nutrient-dense meal.",
+      "dietary_tags": [
+        "vegetarian",
+        "gluten_free",
+        "dairy_free",
+        "nut_free",
+        "low_salt",
+        "low_sugar",
+        "high_protein",
+        "high_fiber",
+        "anti_inflammatory"
+      ],
+      "symptom_support": [
+        "fatigue",
+        "weight_management"
+      ],
+      "texture_class": "regular",
+      "nutrition": {
+        "calories_per_serving": 325,
+        "protein_g": 13,
+        "fiber_g": 10,
+        "fat_g": 12,
+        "carbs_g": 45,
+        "sugar_g": 8,
+        "sodium_mg": 280
+      },
+      "servings": 4,
+      "prep_time_mins": 20,
+      "cook_time_mins": 40,
+      "ingredients": [
+        "2 medium eggplants, halved lengthwise",
+        "1 cup cooked quinoa",
+        "1 cup diced tomatoes",
+        "1/2 cup diced onion",
+        "1/2 cup diced bell pepper",
+        "2 cloves garlic, minced",
+        "1 tbsp olive oil",
+        "1 tsp dried oregano",
+        "1/2 tsp dried basil",
+        "1/4 tsp salt",
+        "1/4 tsp black pepper"
+      ],
+      "instructions": [
+        "Preheat oven to 400°F.",
+        "Scoop out the flesh from the eggplant halves, leaving a 1/4-inch border. Chop the eggplant flesh.",
+        "In a skillet, heat the olive oil over medium heat. Add the chopped eggplant, onion, bell pepper, and garlic. Sauté for 5-7 minutes until vegetables are tender.",
+        "Stir in the cooked quinoa, tomatoes, oregano, basil, salt, and pepper. Cook for an additional 2-3 minutes.",
+        "Spoon the quinoa mixture back into the eggplant shells.",
+        "Bake for 25-30 minutes, until the eggplant is tender.",
+        "Serve warm."
+      ],
+      "clinical_notes": "This recipe is a great source of fiber, protein, and antioxidants from the quinoa, vegetables, and Mediterranean herbs and spices. The eggplant provides a low-calorie, nutrient-dense base that can help support healthy weight management and long-term cancer prevention.",
+      "allergen_info": "None",
+      "tips": "For patients with a poor appetite, try serving smaller portions or pairing this with a simple side salad.",
+      "recipe_id": "8973a812-b103-40e0-bd53-7126e617e584",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:44:44.180993",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    }
+  ],
+  "advice": [
+    {
+      "category": "General Nutrition Priorities",
+      "key_recommendation": "Focus on maintaining weight, muscle mass, and adequate nutrition during chemotherapy.",
+      "detailed_guidance": "Chemotherapy can significantly impact appetite, taste, and the ability to eat. It's important to prioritize nutrient-dense foods that can help maintain weight and muscle mass, which are crucial for tolerating treatment and preparing for surgery.",
+      "do_recommend": [
+        "Protein-rich foods like lean meats, fish, eggs, dairy, beans, and lentils",
+        "High-calorie, nutrient-dense foods like nuts, nut butters, avocados, and full-fat dairy",
+        "Fruits and vegetables in a variety of colors"
+      ],
+      "avoid_recommend": [
+        "Heavily processed foods",
+        "High-fiber foods if experiencing gastrointestinal side effects"
+      ],
+      "symptom_tags": [
+        "appetite_loss",
+        "weight_loss",
+        "weight_gain"
+      ],
+      "meal_suggestions": [
+        "Smoothie with protein powder, Greek yogurt, and frozen fruit",
+        "Grilled salmon with roasted sweet potatoes and steamed broccoli",
+        "Lentil and vegetable stew with whole-grain bread"
+      ],
+      "practical_tips": [
+        "Eat small, frequent meals throughout the day",
+        "Keep nutrient-dense snacks on hand",
+        "Consider using a nutritional supplement if appetite is poor"
+      ],
+      "clinical_context": "Maintaining adequate nutrition is crucial during chemotherapy to support the body's ability to tolerate treatment, prevent weight loss, and prepare for surgery.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "23bd3a10-a3c0-4267-acff-22c9469f05c3",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:59.735288",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Managing Nausea and Taste Changes",
+      "key_recommendation": "Adopt strategies to manage nausea and taste changes to ensure adequate food intake.",
+      "detailed_guidance": "Nausea and taste changes are common side effects of chemotherapy that can make it challenging to eat. Implementing specific strategies to manage these symptoms can help maintain food intake and prevent weight loss.",
+      "do_recommend": [
+        "Cold, bland, or tart foods like popsicles, fruit smoothies, or citrus fruits",
+        "Ginger, mint, or lemon-flavored foods and beverages",
+        "Small, frequent meals and snacks"
+      ],
+      "avoid_recommend": [
+        "Strong-smelling or fried foods",
+        "Highly acidic or spicy foods"
+      ],
+      "symptom_tags": [
+        "nausea",
+        "taste_changes"
+      ],
+      "meal_suggestions": [
+        "Frozen fruit and yogurt smoothie",
+        "Grilled chicken breast with steamed vegetables and lemon-herb seasoning",
+        "Chilled cucumber and mint gazpacho"
+      ],
+      "practical_tips": [
+        "Experiment with different flavors and textures to find what appeals to your taste buds",
+        "Avoid cooking strong-smelling foods at home",
+        "Sip on ginger tea or suck on hard candies to help settle the stomach"
+      ],
+      "clinical_context": "Nausea and taste changes can significantly impact food intake, leading to unintentional weight loss and decreased tolerance to treatment. Addressing these side effects is crucial for maintaining nutritional status.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "10e30184-47c2-46b5-832c-832c7e09c1f5",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:59.735314",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Food Safety Considerations",
+      "key_recommendation": "Follow food safety guidelines to reduce the risk of foodborne illnesses during chemotherapy.",
+      "detailed_guidance": "Chemotherapy can weaken the immune system, increasing the risk of foodborne illnesses. It's important to take extra precautions when handling, preparing, and storing food to prevent infections.",
+      "do_recommend": [
+        "Thoroughly cook all meat, poultry, and seafood",
+        "Avoid raw or undercooked eggs, sprouts, unpasteurized dairy, and soft cheeses",
+        "Wash all fruits and vegetables thoroughly"
+      ],
+      "avoid_recommend": [
+        "Buffets, salad bars, and deli meats",
+        "Unwashed fruits and vegetables",
+        "Unpasteurized dairy products"
+      ],
+      "symptom_tags": [
+        "neutropenia"
+      ],
+      "meal_suggestions": [
+        "Grilled salmon with roasted sweet potatoes and steamed broccoli",
+        "Baked chicken breast with quinoa and roasted vegetables",
+        "Lentil and vegetable soup with whole-grain crackers"
+      ],
+      "practical_tips": [
+        "Keep a clean kitchen and wash hands frequently",
+        "Use separate cutting boards for raw and cooked foods",
+        "Refrigerate leftovers promptly and reheat thoroughly"
+      ],
+      "clinical_context": "Chemotherapy can compromise the immune system, increasing the risk of foodborne illnesses. Implementing food safety practices is crucial to prevent infections and support overall health during this stage of treatment.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "8c502640-8ce0-4523-accf-44132c1cb443",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:59.735325",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Hydration and Fluid Intake",
+      "key_recommendation": "Maintain adequate hydration by consuming a variety of fluids throughout the day.",
+      "detailed_guidance": "Staying hydrated is essential during chemotherapy, as it can help prevent dehydration, constipation, and other side effects. Aim to drink a minimum of 8 cups (64 ounces) of fluids per day, and adjust as needed based on individual needs and symptoms.",
+      "do_recommend": [
+        "Water, herbal tea, broth-based soups, and diluted fruit juices",
+        "Electrolyte-rich beverages like coconut water or sports drinks",
+        "Popsicles, ice chips, and gelatin desserts"
+      ],
+      "avoid_recommend": [
+        "Caffeinated beverages in excess",
+        "Sugary sodas and juices"
+      ],
+      "symptom_tags": [
+        "constipation",
+        "diarrhea"
+      ],
+      "meal_suggestions": [
+        "Vegetable-based soup with whole-grain crackers",
+        "Fruit smoothie made with Greek yogurt and coconut water",
+        "Popsicles made with 100% fruit juice"
+      ],
+      "practical_tips": [
+        "Carry a water bottle and sip throughout the day",
+        "Set reminders to drink fluids regularly",
+        "Experiment with different flavors and temperatures to find what appeals to you"
+      ],
+      "clinical_context": "Adequate hydration is crucial during chemotherapy to prevent dehydration, constipation, and other side effects. Maintaining fluid intake can also help support overall health and tolerance to treatment.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "9bddea54-478a-430d-905c-0813a49e2bd4",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:59.735334",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Supplements and Special Considerations",
+      "key_recommendation": "Discuss the use of supplements with your healthcare team and consider individual needs and preferences.",
+      "detailed_guidance": "Some supplements may be beneficial during chemotherapy, but it's important to consult with your healthcare team before starting any new supplements. They can provide guidance on the appropriate type and dosage based on your individual needs and treatment plan.",
+      "do_recommend": [
+        "Multivitamin formulated for cancer patients",
+        "Omega-3 fatty acids",
+        "Probiotic supplements"
+      ],
+      "avoid_recommend": [
+        "Herbal supplements or high-dose vitamins without medical approval"
+      ],
+      "symptom_tags": [
+        "appetite_loss",
+        "weight_loss",
+        "neutropenia"
+      ],
+      "meal_suggestions": [
+        "Grilled salmon with roasted vegetables and a side salad",
+        "Vegetable and bean chili with whole-grain cornbread",
+        "Oatmeal with berries, nuts, and a scoop of protein powder"
+      ],
+      "practical_tips": [
+        "Take supplements with meals to improve absorption",
+        "Discuss any dietary changes or supplements with your healthcare team",
+        "Consider using a nutrition tracking app to monitor your intake"
+      ],
+      "clinical_context": "Certain supplements may be beneficial during chemotherapy to address specific nutritional needs, but it's crucial to discuss their use with your healthcare team to ensure safety and effectiveness.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "4d94b084-4ac2-4895-803b-88f0a17a7834",
+      "treatment_stages": [
+        "3"
+      ],
+      "stage_display_names": [
+        "Chemotherapy Before Surgery"
+      ],
+      "created_at": "2026-01-28T00:44:59.735342",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "General Nutrition Priorities",
+      "key_recommendation": "Focus on a balanced, nutrient-dense diet to support long-term health and cancer prevention.",
+      "detailed_guidance": "After completing active treatment, it's important to shift the focus towards a diet that supports overall health, immune function, and cancer prevention. This involves emphasizing a variety of whole, minimally processed foods that are rich in essential vitamins, minerals, and antioxidants.",
+      "do_recommend": [
+        "Fruits and vegetables",
+        "Whole grains",
+        "Lean proteins",
+        "Healthy fats"
+      ],
+      "avoid_recommend": [
+        "Highly processed foods",
+        "Added sugars",
+        "Excessive saturated and trans fats"
+      ],
+      "symptom_tags": [
+        "weight_management"
+      ],
+      "meal_suggestions": [
+        "Grilled salmon with roasted vegetables and quinoa",
+        "Stir-fried tofu and broccoli over brown rice",
+        "Mixed green salad with grilled chicken, avocado, and nuts"
+      ],
+      "practical_tips": [
+        "Meal prep or batch cooking to ensure easy access to nutritious meals",
+        "Explore new recipes and cooking methods to keep meals interesting",
+        "Involve family members in planning and preparing meals"
+      ],
+      "clinical_context": "A balanced, nutrient-dense diet during this stage can help support overall health, maintain a healthy weight, and reduce the risk of cancer recurrence or other chronic diseases.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "2e32c4dd-89d2-4423-b305-9d43cc0d4e50",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:45:15.128312",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Managing Fatigue",
+      "key_recommendation": "Incorporate nutrient-dense foods and hydration to help combat fatigue and support energy levels.",
+      "detailed_guidance": "Fatigue is a common concern for breast cancer survivors who have completed active treatment. Focusing on a diet rich in complex carbohydrates, lean proteins, and healthy fats can help provide sustained energy throughout the day. Staying hydrated is also crucial for managing fatigue.",
+      "do_recommend": [
+        "Whole grains like quinoa, brown rice, and oats",
+        "Lean proteins such as chicken, fish, tofu, and legumes",
+        "Healthy fats from avocado, nuts, and olive oil",
+        "Water, herbal teas, and low-sugar fruit juices"
+      ],
+      "avoid_recommend": [
+        "Sugary or high-fat snacks that can cause energy crashes"
+      ],
+      "symptom_tags": [
+        "fatigue"
+      ],
+      "meal_suggestions": [
+        "Oatmeal with berries, nuts, and Greek yogurt",
+        "Grilled salmon with roasted sweet potatoes and steamed broccoli",
+        "Whole grain pasta with grilled chicken and roasted vegetables"
+      ],
+      "practical_tips": [
+        "Incorporate protein and complex carbs at each meal to sustain energy",
+        "Carry a water bottle and sip throughout the day",
+        "Plan for short rest breaks during the day"
+      ],
+      "clinical_context": "Addressing fatigue through a nutrient-dense diet and proper hydration can help breast cancer survivors regain energy and improve their overall quality of life during this stage.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "c39788ab-ae86-4bc0-88c9-d7d05cd7a05a",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:45:15.128360",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Food Safety Considerations",
+      "key_recommendation": "Prioritize food safety to reduce the risk of foodborne illnesses during this stage of recovery.",
+      "detailed_guidance": "Breast cancer survivors may have a weakened immune system, making them more susceptible to foodborne illnesses. It's important to follow proper food handling, preparation, and storage practices to minimize the risk of infections.",
+      "do_recommend": [
+        "Thoroughly cook all meats, poultry, and seafood",
+        "Wash all fruits and vegetables thoroughly",
+        "Refrigerate perishable foods promptly",
+        "Use separate cutting boards for raw and cooked foods"
+      ],
+      "avoid_recommend": [
+        "Raw or undercooked animal products",
+        "Unpasteurized dairy or juices",
+        "Foods that have been left at room temperature for an extended period"
+      ],
+      "symptom_tags": [
+        "neutropenia"
+      ],
+      "meal_suggestions": [
+        "Baked chicken with roasted vegetables",
+        "Grilled salmon salad with mixed greens",
+        "Stir-fried tofu and broccoli over brown rice"
+      ],
+      "practical_tips": [
+        "Keep a food thermometer on hand to ensure proper cooking temperatures",
+        "Wash hands thoroughly before and after handling food",
+        "Discard any expired or questionable food items"
+      ],
+      "clinical_context": "Maintaining proper food safety practices is crucial during this stage to prevent foodborne illnesses that could further compromise the immune system and recovery process.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "b73183bc-6eb1-46da-bd44-cfe59983318d",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:45:15.128384",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Hydration and Fluid Intake",
+      "key_recommendation": "Ensure adequate hydration by consuming a variety of fluids throughout the day.",
+      "detailed_guidance": "Proper hydration is essential for overall health, supporting the body's recovery and reducing the risk of certain side effects. Aim to drink a variety of fluids, including water, herbal teas, and low-sugar fruit juices, to meet your daily hydration needs.",
+      "do_recommend": [
+        "Water",
+        "Herbal teas",
+        "Low-sugar fruit juices",
+        "Broth-based soups"
+      ],
+      "avoid_recommend": [
+        "Sugary beverages",
+        "Caffeinated drinks in excess"
+      ],
+      "symptom_tags": [
+        "dry_mouth",
+        "constipation"
+      ],
+      "meal_suggestions": [
+        "Vegetable-based soup with whole grain bread",
+        "Smoothie made with fruit, yogurt, and spinach",
+        "Herbal tea with a slice of lemon"
+      ],
+      "practical_tips": [
+        "Carry a water bottle and sip throughout the day",
+        "Set reminders to drink fluids regularly",
+        "Incorporate hydrating foods like watermelon, cucumber, and berries"
+      ],
+      "clinical_context": "Maintaining proper hydration can help alleviate common side effects, such as dry mouth and constipation, and support the overall recovery and well-being of breast cancer survivors.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "e4da7e8a-f8dc-4c08-a9be-352f0ebec6c2",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:45:15.128406",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    },
+    {
+      "category": "Supplements and Special Considerations",
+      "key_recommendation": "Discuss the use of supplements with your healthcare team and consider individual needs and preferences.",
+      "detailed_guidance": "While a balanced diet is the primary focus, some breast cancer survivors may benefit from specific supplements to address nutritional deficiencies or support their recovery. It's important to discuss the use of supplements with your healthcare team, as they can provide personalized guidance based on your individual needs and medical history.",
+      "do_recommend": [
+        "Multivitamin",
+        "Vitamin D",
+        "Omega-3 fatty acids",
+        "Probiotic supplements"
+      ],
+      "avoid_recommend": [
+        "Herbal supplements without consulting a healthcare provider"
+      ],
+      "symptom_tags": [
+        "weight_management"
+      ],
+      "meal_suggestions": [
+        "Not applicable"
+      ],
+      "practical_tips": [
+        "Start with low doses and gradually increase if recommended",
+        "Choose high-quality, third-party tested supplements",
+        "Communicate any supplement use with your healthcare team"
+      ],
+      "clinical_context": "Certain supplements may help address specific nutritional needs or support the overall health and well-being of breast cancer survivors during this stage. However, it's crucial to discuss their use with your healthcare team to ensure safety and efficacy.",
+      "evidence_level": "oncology-guideline-based",
+      "advice_id": "573d0dcb-35f0-4b0e-a85f-7db52820cd6f",
+      "treatment_stages": [
+        "5"
+      ],
+      "stage_display_names": [
+        "Finished Active Treatment"
+      ],
+      "created_at": "2026-01-28T00:45:15.128427",
+      "source": "LLM-generated (oncology nutrition guidelines)"
+    }
+  ]
+}

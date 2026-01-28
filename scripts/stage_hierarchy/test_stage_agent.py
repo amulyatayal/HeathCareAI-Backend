@@ -1,10 +1,11 @@
 import asyncio
 import sys
 import logging
+import os
 from dotenv import load_dotenv
 
-# Setup path and env
-sys.path.insert(0, '.')
+# Setup path and env - adjust for new location
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 load_dotenv()
 
 # Logger setup
