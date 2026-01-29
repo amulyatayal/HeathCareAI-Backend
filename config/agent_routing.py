@@ -18,13 +18,13 @@ from config.pipeline_config import IntentCategory, ModelType
 
 class KnowledgeBase(str, Enum):
     """Available knowledge bases for retrieval."""
-    MEDICAL = "breast_cancer_knowledge"  # Main breast cancer KB (PDFs, Q&A)
+    MEDICAL = "medical_all_kb"  # Main breast cancer KB (PDFs, Q&A)
     NUTRITION = "nutrition_assistant"    # Nutrition and recipe KB
     FORUM = "forum_posts"                # Community forum discussions
     EMOTIONAL = "emotional_support"      # Emotional support content (future)
     LOGISTICS = "logistics_navigation"   # Hospital/insurance navigation (future)
     # Per-intent KBs (new)
-    CANCER_TREATMENT = "kb_cancer_treatment"  # Cancer treatment Q&A from leaflets
+    CANCER_TREATMENT = "medical_all_kb"  # Cancer treatment Q&A from leaflets
 
 
 # ================================

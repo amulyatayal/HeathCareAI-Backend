@@ -920,6 +920,8 @@ async def main():
                         help='Process only a specific leaflet (filename, e.g., bcc20-tamoxifen-web.pdf)')
     parser.add_argument('--all-leaflets', action='store_true',
                         help='Process ALL unique leaflets from all intents as a single unified KB (medical_all_kb)')
+    parser.add_argument('--ingest-all-kb', action='store_true',
+                        help='Ingest existing medical_all_kb_qa.json to OpenSearch (use with --clear-index to replace)')
     args = parser.parse_args()
     
     # Load mapping
@@ -932,13 +934,14 @@ async def main():
             logger.info(f"  - {intent}: {leaflet_count} leaflets → {config.get('kb_index', 'N/A')}")
         return
     
-    if not args.intent and not args.all and not args.all_leaflets:
+    if not args.intent and not args.all and not args.all_leaflets and not args.ingest_all_kb:
         parser.print_help()
         logger.info("\nExamples:")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent medication_info --dry-run")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --all")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent cancer_treatment --ingest-only")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --all-leaflets --chunk-size 2000 --dry-run")
+        logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --ingest-all-kb --clear-index")
         return
     
     # Handle ingest-only mode
@@ -948,6 +951,43 @@ async def main():
             return
         
         await ingest_existing_qa(args.intent, mapping, clear_index=args.clear_index)
+        return
+    
+    # Handle ingest-all-kb mode: ingest existing medical_all_kb_qa.json
+    if args.ingest_all_kb:
+        qa_file = OUTPUT_DIR / "medical_all_kb_qa.json"
+        if not qa_file.exists():
+            logger.error(f"File not found: {qa_file}")
+            logger.info("Run with --all-leaflets first to generate the Q&A file")
+            return
+        
+        logger.info("="*60)
+        logger.info("INGESTING MEDICAL_ALL_KB")
+        logger.info("="*60)
+        
+        with open(qa_file, 'r', encoding='utf-8') as f:
+            documents = json.load(f)
+        
+        logger.info(f"  Loaded {len(documents)} documents from {qa_file.name}")
+        
+        if args.clear_index:
+            from config import opensearch
+            client = opensearch()
+            try:
+                if client.indices.exists(index="medical_all_kb"):
+                    logger.info("  Deleting existing medical_all_kb index...")
+                    client.indices.delete(index="medical_all_kb")
+                    logger.info("  Index deleted. Will be recreated with correct mapping.")
+            except Exception as e:
+                logger.warning(f"  Could not delete index: {e}")
+        
+        await index_documents_to_opensearch(documents, "medical_all_kb", batch_size=50)
+        
+        logger.info("\n" + "="*60)
+        logger.info("INGESTION COMPLETE")
+        logger.info(f"  Documents indexed: {len(documents)}")
+        logger.info(f"  Index: medical_all_kb")
+        logger.info("="*60)
         return
     
     # Handle --all-leaflets mode: unified KB from all unique leaflets
