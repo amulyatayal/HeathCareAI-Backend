@@ -1,8 +1,13 @@
 """
 Generate Q&A pairs for per-intent knowledge bases.
-Creates TWO answer variants per question:
-  1. Generated: AI-written answer using leaflet content
-  2. Citation-only: Verbatim excerpt from PDF (no paraphrasing)
+Creates ONE document per question with BOTH answer variants:
+  - derived_answer: AI-written answer synthesized from leaflet content
+  - citation_only: Verbatim excerpt from PDF (no paraphrasing)
+  - source_excerpt: The original source text (same as citation_only)
+
+This consolidated format reduces KB size by ~50% while preserving both answer types.
+The retrieval agent uses derived_answer for semantic search, and the reasoning agent
+selects which answer to use at response time based on intent.
 
 Usage:
   # Generate Q&A for a single intent (for testing)
@@ -158,6 +163,28 @@ def load_intent_mapping() -> Dict:
         mapping = json.load(f)
     # Remove metadata keys
     return {k: v for k, v in mapping.items() if not k.startswith('_')}
+
+
+def get_all_unique_leaflets(mapping: Dict) -> List[str]:
+    """
+    Collect all unique leaflet filenames from all intents.
+    
+    Returns:
+        Sorted list of unique leaflet filenames
+    """
+    all_leaflets = set()
+    for intent, config in mapping.items():
+        if intent.startswith('_') or intent == 'unknown':
+            continue
+        for leaflet in config.get('leaflets', []):
+            # Clean up any trailing commas or whitespace
+            clean_leaflet = leaflet.strip().rstrip(',')
+            if clean_leaflet:
+                all_leaflets.add(clean_leaflet)
+    
+    unique_list = sorted(list(all_leaflets))
+    logger.info(f"Found {len(unique_list)} unique leaflets across all intents")
+    return unique_list
 
 
 def load_url_mapping() -> Dict[str, Dict]:
@@ -353,6 +380,12 @@ CRITICAL RULES:
 4. Only create Q&A for information actually present in the document
 5. relevance_score: 0.9+ for highly relevant, 0.7-0.9 for relevant, <0.7 for tangential
 
+QUESTIONS TO SKIP (do NOT create these):
+- Do NOT create questions about what the leaflet/booklet covers or contains
+- Do NOT create questions like "What is this leaflet about?" or "What topics are covered in this booklet?"
+- Do NOT create questions about the document structure, authorship, or publication details
+- Focus ONLY on the actual medical/health information content that helps patients
+
 Generate the Q&A pairs now:"""
 
         # Use Claude Sonnet for higher quality Q&A generation
@@ -420,17 +453,21 @@ Generate the Q&A pairs now:"""
                 else:
                     raise e2
         
-        # Create documents for BOTH answer types
+        # Create ONE document per Q&A with both answer variants
         documents = []
         for qa in qa_pairs:
-            # The citation_answer is the source excerpt for both types
-            source_excerpt = qa.get("citation_answer", "")
+            # The citation_answer is the verbatim source text
+            citation_only = qa.get("citation_answer", "")
             
             # Get URL info
             url_info = source_url_info or {}
             
-            base_doc = {
+            # Single consolidated document with both answer types
+            doc = {
                 "question": qa.get("question", ""),
+                "derived_answer": qa.get("generated_answer", ""),  # AI-synthesized answer
+                "citation_only": citation_only,  # Verbatim quote from source
+                "source_excerpt": citation_only,  # Same as citation_only (for provenance)
                 "source_file": chunk["source_file"],
                 "source_url": url_info.get("url", ""),
                 "source_name": url_info.get("source", ""),
@@ -441,22 +478,10 @@ Generate the Q&A pairs now:"""
                 "intent": intent,
                 "created_at": datetime.utcnow().isoformat(),
                 "relevance_score": qa.get("relevance_score", 0.8),
-                "source_excerpt": source_excerpt  # Always include the verbatim source
             }
-            
-            # Document 1: Generated answer (with source reference)
-            gen_doc = base_doc.copy()
-            gen_doc["answer"] = qa.get("generated_answer", "")
-            gen_doc["answer_type"] = "generated"
-            documents.append(gen_doc)
-            
-            # Document 2: Citation-only answer (answer = source_excerpt)
-            cite_doc = base_doc.copy()
-            cite_doc["answer"] = source_excerpt
-            cite_doc["answer_type"] = "citation_only"
-            documents.append(cite_doc)
+            documents.append(doc)
         
-        logger.info(f"    Generated {len(qa_pairs)} Q&A pairs ({len(documents)} docs with both answer types)")
+        logger.info(f"    Generated {len(qa_pairs)} Q&A documents (consolidated format)")
         return documents
         
     except Exception as e:
@@ -580,6 +605,122 @@ async def process_intent(
     return len(all_documents), all_documents
 
 
+async def process_all_leaflets_as_one_kb(
+    leaflets: List[str],
+    url_mapping: Dict = None,
+    dry_run: bool = True,
+    max_questions_per_chunk: int = 0,
+    chunk_size: int = 2000
+) -> Tuple[int, List[Dict]]:
+    """
+    Process ALL leaflets as a single unified knowledge base (medical_all_kb).
+    
+    This creates one comprehensive KB from all available leaflets, using smaller
+    chunk sizes for maximum Q&A coverage.
+    
+    Args:
+        leaflets: List of unique leaflet filenames to process
+        url_mapping: Pre-loaded URL mapping dict
+        dry_run: If True, only generate JSON (no OpenSearch indexing)
+        max_questions_per_chunk: Max Q&A pairs per chunk (0 = no limit)
+        chunk_size: Maximum characters per chunk (smaller = more Q&A pairs)
+    
+    Returns:
+        Tuple of (document_count, documents_list)
+    """
+    kb_index = "medical_all_kb"
+    intent = "medical"  # Generic intent for unified KB
+    
+    logger.info(f"\n{'='*60}")
+    logger.info(f"UNIFIED KNOWLEDGE BASE GENERATION: {kb_index}")
+    logger.info(f"{'='*60}")
+    logger.info(f"Total unique leaflets: {len(leaflets)}")
+    logger.info(f"Chunk size: {chunk_size} chars (smaller = more Q&A pairs)")
+    logger.info(f"Max questions per chunk: {'unlimited' if max_questions_per_chunk == 0 else max_questions_per_chunk}")
+    logger.info(f"Dry run: {dry_run}")
+    logger.info(f"{'='*60}")
+    
+    if not leaflets:
+        logger.error("No leaflets to process")
+        return 0, []
+    
+    # Load URL mapping if not provided
+    if url_mapping is None:
+        url_mapping = load_url_mapping()
+    
+    all_documents = []
+    processed_count = 0
+    skipped_count = 0
+    
+    for leaflet_idx, leaflet_name in enumerate(leaflets):
+        pdf_path = DATA_DIR / leaflet_name
+        
+        if not pdf_path.exists():
+            logger.warning(f"  [{leaflet_idx+1}/{len(leaflets)}] Leaflet not found: {leaflet_name}")
+            skipped_count += 1
+            continue
+        
+        logger.info(f"\n  [{leaflet_idx+1}/{len(leaflets)}] Processing: {leaflet_name}")
+        
+        # Get URL info for this leaflet
+        source_url_info = get_leaflet_url(leaflet_name, url_mapping)
+        if source_url_info.get('url'):
+            logger.info(f"    Source URL: {source_url_info['url'][:60]}...")
+        
+        # Extract pages
+        pages = extract_text_with_pages(pdf_path)
+        if not pages:
+            logger.warning(f"    No text extracted from {leaflet_name}")
+            skipped_count += 1
+            continue
+        
+        # Chunk pages with smaller chunk size for more Q&A pairs
+        chunks = chunk_pages(pages, max_chunk_size=chunk_size)
+        logger.info(f"    Split into {len(chunks)} chunks (@ {chunk_size} chars)")
+        
+        # Generate Q&A for each chunk
+        leaflet_docs = 0
+        for chunk_idx, chunk in enumerate(chunks):
+            logger.info(f"    Processing chunk {chunk_idx + 1}/{len(chunks)} (pages {chunk['page_start']}-{chunk['page_end']})")
+            
+            documents = await generate_dual_qa_pairs(
+                chunk=chunk,
+                intent=intent,
+                source_url_info=source_url_info,
+                max_questions=max_questions_per_chunk
+            )
+            
+            all_documents.extend(documents)
+            leaflet_docs += len(documents)
+            
+            # Rate limiting to avoid API throttling
+            await asyncio.sleep(0.5)
+        
+        logger.info(f"    ✓ Generated {leaflet_docs} Q&A pairs from {leaflet_name}")
+        processed_count += 1
+    
+    logger.info(f"\n{'='*60}")
+    logger.info(f"GENERATION SUMMARY")
+    logger.info(f"{'='*60}")
+    logger.info(f"  Leaflets processed: {processed_count}/{len(leaflets)}")
+    logger.info(f"  Leaflets skipped: {skipped_count}")
+    logger.info(f"  Total Q&A documents: {len(all_documents)}")
+    logger.info(f"{'='*60}")
+    
+    # Save to JSON file
+    output_file = OUTPUT_DIR / f"{kb_index}_qa.json"
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(all_documents, f, indent=2, ensure_ascii=False)
+    logger.info(f"  📄 Saved to: {output_file}")
+    
+    # Index to OpenSearch if not dry run
+    if not dry_run and all_documents:
+        await index_documents_to_opensearch(all_documents, kb_index)
+    
+    return len(all_documents), all_documents
+
+
 async def index_documents_to_opensearch(documents: List[Dict], index_name: str, batch_size: int = 50):
     """Index documents to OpenSearch with embeddings using bulk indexing."""
     try:
@@ -634,8 +775,9 @@ async def index_documents_to_opensearch(documents: List[Dict], index_name: str, 
             # Generate embeddings for the batch
             bulk_actions = []
             for doc in batch:
-                # Create content for embedding
-                content = f"Question: {doc['question']}\n\nAnswer: {doc['answer']}"
+                # Create content for embedding using derived_answer (AI-synthesized, better for semantic search)
+                derived_answer = doc.get('derived_answer', doc.get('answer', ''))  # Fallback for old format
+                content = f"Question: {doc['question']}\n\nAnswer: {derived_answer}"
                 
                 # Generate embedding
                 try:
@@ -653,7 +795,10 @@ async def index_documents_to_opensearch(documents: List[Dict], index_name: str, 
                 # Generate document ID from content hash
                 doc_id = str(hash(content))
                 
-                # Build OpenSearch document
+                # Get citation_only (fallback to source_excerpt for old format)
+                citation_only = doc.get('citation_only', doc.get('source_excerpt', ''))
+                
+                # Build OpenSearch document (consolidated format)
                 os_doc = {
                     "_index": index_name,
                     "_id": doc_id,
@@ -666,8 +811,9 @@ async def index_documents_to_opensearch(documents: List[Dict], index_name: str, 
                         "embedding": embedding,  # Field name must match index mapping
                         "metadata": {
                             "question": doc['question'],
-                            "answer": doc['answer'],
-                            "answer_type": doc.get('answer_type', 'generated'),
+                            "derived_answer": derived_answer,  # AI-synthesized answer
+                            "citation_only": citation_only,  # Verbatim quote for citation mode
+                            "source_excerpt": doc.get('source_excerpt', citation_only),  # Original source text
                             "intent": intent,
                             "section": doc.get('section', ''),
                             "page_start": doc.get('page_start'),
@@ -675,7 +821,7 @@ async def index_documents_to_opensearch(documents: List[Dict], index_name: str, 
                             "source_file": doc.get('source_file', ''),
                             "source_name": doc.get('source_name', ''),
                             "source_display_name": doc.get('source_display_name', ''),
-                            "source_excerpt": doc.get('source_excerpt', ''),
+                            "source_url": doc.get('source_url', ''),
                             "relevance_score": doc.get('relevance_score', 0.9)
                         }
                     }
@@ -772,6 +918,8 @@ async def main():
                         help='List available intents from mapping')
     parser.add_argument('--leaflet', type=str, default=None,
                         help='Process only a specific leaflet (filename, e.g., bcc20-tamoxifen-web.pdf)')
+    parser.add_argument('--all-leaflets', action='store_true',
+                        help='Process ALL unique leaflets from all intents as a single unified KB (medical_all_kb)')
     args = parser.parse_args()
     
     # Load mapping
@@ -784,12 +932,13 @@ async def main():
             logger.info(f"  - {intent}: {leaflet_count} leaflets → {config.get('kb_index', 'N/A')}")
         return
     
-    if not args.intent and not args.all:
+    if not args.intent and not args.all and not args.all_leaflets:
         parser.print_help()
         logger.info("\nExamples:")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent medication_info --dry-run")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --all")
         logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --intent cancer_treatment --ingest-only")
+        logger.info("  python scripts/kb-preprocessing/generate_intent_qa.py --all-leaflets --chunk-size 2000 --dry-run")
         return
     
     # Handle ingest-only mode
@@ -799,6 +948,26 @@ async def main():
             return
         
         await ingest_existing_qa(args.intent, mapping, clear_index=args.clear_index)
+        return
+    
+    # Handle --all-leaflets mode: unified KB from all unique leaflets
+    if args.all_leaflets:
+        all_leaflets = get_all_unique_leaflets(mapping)
+        url_mapping = load_url_mapping()
+        
+        count, _ = await process_all_leaflets_as_one_kb(
+            leaflets=all_leaflets,
+            url_mapping=url_mapping,
+            dry_run=args.dry_run,
+            max_questions_per_chunk=args.max_questions,
+            chunk_size=args.chunk_size
+        )
+        
+        logger.info("\n" + "="*60)
+        logger.info("UNIFIED KB GENERATION COMPLETE")
+        logger.info(f"Total Q&A documents: {count}")
+        logger.info(f"Output: data/intent_qa/medical_all_kb_qa.json")
+        logger.info("="*60)
         return
     
     logger.info("="*60)

@@ -93,12 +93,8 @@ class RetrievalAgent(BaseAgent):
         # Search primary KB first
         primary_kb = knowledge_bases[0] if knowledge_bases else KnowledgeBase.MEDICAL
         
-        # Check if this intent requires citation-only answers
-        citation_only = is_citation_only(intent)
-        answer_type_filter = "citation_only" if citation_only else None
-        
-        if citation_only:
-            logger.info(f"Intent '{intent}' requires citation_only answers")
+        # Note: citation_only vs derived_answer selection now happens at response time
+        # in the reasoning agent, not during retrieval. Each document contains both answer types.
         
         try:
             result = await self._search_kb(
@@ -106,8 +102,7 @@ class RetrievalAgent(BaseAgent):
                 query=context.user_message,
                 min_chunks=min_chunks,
                 min_score=min_score,
-                require_keyword=require_keyword,
-                answer_type_filter=answer_type_filter
+                require_keyword=require_keyword
             )
             
             # If insufficient evidence from primary KB, try secondary KBs
@@ -120,8 +115,7 @@ class RetrievalAgent(BaseAgent):
                         query=context.user_message,
                         min_chunks=min_chunks,
                         min_score=min_score,
-                        require_keyword=require_keyword,
-                        answer_type_filter=answer_type_filter
+                        require_keyword=require_keyword
                     )
                     
                     # Merge results
@@ -157,12 +151,10 @@ class RetrievalAgent(BaseAgent):
         query: str,
         min_chunks: int,
         min_score: float,
-        require_keyword: bool,
-        answer_type_filter: Optional[str] = None
+        require_keyword: bool
     ) -> RetrievalResult:
         """Search a specific knowledge base."""
-        filter_info = f", answer_type={answer_type_filter}" if answer_type_filter else ""
-        logger.info(f"Searching KB '{kb_name}' with min_chunks={min_chunks}, min_score={min_score}{filter_info}")
+        logger.info(f"Searching KB '{kb_name}' with min_chunks={min_chunks}, min_score={min_score}")
         
         kb_service = self._get_kb_service(kb_name)
         
@@ -182,12 +174,6 @@ class RetrievalAgent(BaseAgent):
         # Convert to RetrievalResult format
         chunks = []
         for chunk_data in rag_result.get("chunks", []):
-            # Filter by answer_type if specified
-            if answer_type_filter:
-                chunk_answer_type = chunk_data.get("answer_type") or chunk_data.get("metadata", {}).get("answer_type")
-                if chunk_answer_type and chunk_answer_type != answer_type_filter:
-                    continue  # Skip non-matching answer types
-            
             # Get metadata from chunk_data (includes source_url from OpenSearch)
             chunk_metadata = chunk_data.get("metadata", {})
             
@@ -198,11 +184,13 @@ class RetrievalAgent(BaseAgent):
                 "content_type": chunk_data.get("content_type"),
                 "tags": chunk_data.get("tags", []),
                 "keyword_match": chunk_data.get("keyword_match", False),
-                "answer_type": chunk_data.get("answer_type"),
                 "source_url": chunk_metadata.get("source_url") or chunk_data.get("source_url"),
                 "source_name": chunk_metadata.get("source_name"),
                 "source_display_name": chunk_metadata.get("source_display_name"),
                 "source_excerpt": chunk_metadata.get("source_excerpt"),
+                # Consolidated answer fields - reasoning agent will select which to use
+                "derived_answer": chunk_metadata.get("derived_answer"),
+                "citation_only": chunk_metadata.get("citation_only"),
             }
             
             chunk = RetrievalChunk(
@@ -278,13 +266,18 @@ class RetrievalAgent(BaseAgent):
 # Helper Functions
 # ================================
 
-def format_chunks_for_prompt(chunks: List[RetrievalChunk], max_chars: int = 8000) -> str:
+def format_chunks_for_prompt(
+    chunks: List[RetrievalChunk], 
+    max_chars: int = 8000,
+    use_citation_only: bool = False
+) -> str:
     """
     Format retrieved chunks into a context string for LLM prompts.
     
     Args:
         chunks: List of retrieved chunks
         max_chars: Maximum character limit for combined context
+        use_citation_only: If True, use verbatim citation_only text instead of derived content
         
     Returns:
         Formatted context string with source citations
@@ -320,8 +313,18 @@ def format_chunks_for_prompt(chunks: List[RetrievalChunk], max_chars: int = 8000
         else:
             citation = f"[Source {i}: {display_name}{section}{pages}]"
         
-        # Format chunk content
-        content = chunk.content.strip()
+        # Select content based on mode
+        # - citation_only mode: use verbatim source text for direct quoting
+        # - normal mode: use derived/synthesized content for AI responses
+        if use_citation_only and chunk.metadata:
+            content = (
+                chunk.metadata.get("citation_only") or 
+                chunk.metadata.get("source_excerpt") or 
+                chunk.content
+            ).strip()
+        else:
+            content = chunk.content.strip()
+        
         chunk_text = f"{citation}\n{content}\n"
         
         # Check character limit

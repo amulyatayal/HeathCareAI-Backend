@@ -293,11 +293,13 @@ class ReasoningAgent(BaseAgent):
         )
         
         # Format evidence (PDF sources only - videos are shown separately in UI)
+        # For citation_only mode, use verbatim source text; otherwise use derived answers
         evidence_context = "No evidence retrieved from knowledge base."
         if context.retrieval_result and context.retrieval_result.chunks:
             evidence_context = format_chunks_for_prompt(
                 context.retrieval_result.chunks,
-                max_chars=6000  # Leave room for rest of prompt
+                max_chars=6000,  # Leave room for rest of prompt
+                use_citation_only=citation_only_mode
             )
         
         # Note: Video suggestions are NOT included in prompt - they appear in UI only
