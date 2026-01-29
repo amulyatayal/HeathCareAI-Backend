@@ -494,7 +494,12 @@ class KnowledgeBaseService:
                     }
                 else:
                     # For non-video indices, store all source fields in metadata
-                    chunk["metadata"] = {k: v for k, v in source.items() if k not in ["content", "embedding"]}
+                    # Flatten nested metadata from indexed documents (citation_only, derived_answer etc.)
+                    base_metadata = {k: v for k, v in source.items() if k not in ["content", "embedding", "metadata"]}
+                    nested_metadata = source.get("metadata", {})
+                    if isinstance(nested_metadata, dict):
+                        base_metadata.update(nested_metadata)
+                    chunk["metadata"] = base_metadata
                 
                 chunks.append(chunk)
                 
