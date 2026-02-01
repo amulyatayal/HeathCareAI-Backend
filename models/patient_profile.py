@@ -95,7 +95,41 @@ class PatientStageHistory(BaseModel):
     )
     source: str = Field(
         ...,
-        description="How stage was set: 'onboarding' | 'manual_update'"
+        description="How stage was set: 'onboarding' | 'llm_inference' | 'manual_update' | 'verification'"
+    )
+    
+    # ===== V2.1 Journey Engine Enhancements =====
+    inference_certainty: Optional[str] = Field(
+        None,
+        description="Certainty level from LLM: HIGH | MEDIUM | LOW"
+    )
+    inference_signals: List[str] = Field(
+        default_factory=list,
+        description="Evidence signals from LLM (e.g., 'User mentioned surgery')"
+    )
+    user_confirmed: bool = Field(
+        default=False,
+        description="Whether user explicitly confirmed this stage change"
+    )
+    from_detailed_stage_id: Optional[str] = Field(
+        None,
+        description="Previous detailed stage ID (e.g., '2.1.1')"
+    )
+    to_detailed_stage_id: Optional[str] = Field(
+        None,
+        description="New detailed stage ID (e.g., '5.1')"
+    )
+    treatment_type: Optional[str] = Field(
+        None,
+        description="Type of treatment if relevant (e.g., 'chemotherapy', 'surgery')"
+    )
+    transition_notes: Optional[str] = Field(
+        None,
+        description="Additional context about this transition"
+    )
+    was_regression: bool = Field(
+        default=False,
+        description="Whether this represents a regression/recurrence"
     )
     
     class Config:
@@ -186,6 +220,64 @@ class PatientProfile(BaseModel):
     detailed_stage_updated_at: Optional[datetime] = Field(
         None,
         description="When detailed stage was last updated"
+    )
+    
+    # ===== V2.1 Journey Engine Enhancements =====
+    
+    # Geo-awareness (for UK deployment)
+    country_code: Optional[str] = Field(
+        "GB",
+        description="ISO country code (e.g., 'GB', 'US') - default UK"
+    )
+    region: Optional[str] = Field(
+        None,
+        description="NHS region or state"
+    )
+    
+    # Stage certainty tracking
+    current_stage_certainty: Optional[str] = Field(
+        None,
+        description="Certainty level of current stage (HIGH/MEDIUM/LOW)"
+    )
+    detailed_stage_certainty: Optional[str] = Field(
+        None,
+        description="Certainty of detailed stage inference"
+    )
+    last_verification_at: Optional[datetime] = Field(
+        None,
+        description="When stage was last verified with user"
+    )
+    
+    # Regression/recurrence tracking
+    has_recurrence: bool = Field(
+        default=False,
+        description="Whether patient has experienced recurrence"
+    )
+    recurrence_date: Optional[datetime] = Field(
+        None,
+        description="When recurrence was detected"
+    )
+    is_regression_detected: bool = Field(
+        default=False,
+        description="System-detected backward stage movement"
+    )
+    treatment_phases_completed: List[str] = Field(
+        default_factory=list,
+        description="Completed treatments: ['surgery', 'chemotherapy']"
+    )
+    first_diagnosis_date: Optional[date] = Field(
+        None,
+        description="Date of initial diagnosis"
+    )
+    
+    # Guest conversion tracking
+    was_guest: bool = Field(
+        default=False,
+        description="Whether user started as guest"
+    )
+    guest_interactions_count: int = Field(
+        default=0,
+        description="Number of interactions before sign-up"
     )
     
     class Config:

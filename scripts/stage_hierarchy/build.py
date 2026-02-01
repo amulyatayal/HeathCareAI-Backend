@@ -20,18 +20,23 @@ from typing import Dict, List, Optional, Any
 
 def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
     """Parse a CSV row into a stage dictionary."""
-    stage_no = row.get('Stage No.', '').strip()
-    sub_stage = row.get('Sub Stage', '').strip()
+    # Build hierarchical stage ID from Sub Stage levels
+    group = row.get('Stage Group', '').strip()
+    level0 = row.get('Sub Stage Level 0', '').strip()
+    level1 = row.get('Sub Stage Level 1', '').strip()
+    level2 = row.get('Sub Stage Level 2', '').strip()
+    
     name = row.get('Name', '').strip()
     
     # Skip rows without a name
     if not name:
         return None
     
-    # Determine stage ID (prefer sub_stage if available)
-    stage_id = sub_stage if sub_stage else stage_no
-    if not stage_id:
+    # Build stage_id from hierarchy (e.g., "2.1.1")
+    parts = [p for p in [group, level0, level1, level2] if p]
+    if not parts:
         return None
+    stage_id = '.'.join(parts)
     
     # Clean up multiline name
     name = ' '.join(name.split())
@@ -40,19 +45,33 @@ def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
     description = row.get('Description', '').strip()
     description = ' '.join(description.split())  # Clean multiline
     
-    # Parse transition stages
-    before_raw = row.get('Before Stage (can be multipl', '').strip()
-    before_stages = [s.strip() for s in before_raw.split(',') if s.strip() and s.strip() != '<start>']
+    # For now, use simple transition logic (can enhance with CSV data later)
+    before_stages = []
+    after_stages = []
     
-    after_raw = row.get('After Stage', '').strip()
-    after_stages = [s.strip() for s in after_raw.split(',') if s.strip() and s.strip() != '<End of Pathways>']
+    # Parse patient facing flag - assume all are patient facing
+    is_patient_facing = True
     
-    # Parse transition notes
-    transition_notes = row.get('Transition notes from this stage to next stage', '').strip()
+    # ===== V2.1: Extract Verification Questions =====
+    verification_questions = []
+    questions_raw = row.get('Patient Facing Questions', '').strip()
+    if questions_raw:
+        # Split by newlines or semicolons
+        questions = [q.strip() for q in questions_raw.replace('\n', ';').split(';') if q.strip()]
+        verification_questions = questions
     
-    # Parse patient facing flag
-    patient_facing_raw = row.get('Patient Facing (Y/N)?', 'Y').strip().upper()
-    is_patient_facing = patient_facing_raw != 'N'
+    # ===== V2.1: Extract Safety Triggers =====
+    # General safety keywords from description
+    safety_keywords = [
+        'fever', 'bleeding', 'severe pain', 'chest pain', 'infection',
+        'swelling', 'redness', 'discharge', 'shortness of breath',
+        'emergency', 'urgent', 'numbness', 'weakness', 'confusion'
+    ]
+    safety_triggers = []
+    description_lower = description.lower()
+    for keyword in safety_keywords:
+        if keyword in description_lower:
+            safety_triggers.append(keyword)
     
     # Determine parent stage from ID structure
     parent_stage_id = get_parent_id(stage_id)
@@ -65,9 +84,13 @@ def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
         "child_stage_ids": [],  # Will be populated later
         "before_stages": before_stages,
         "after_stages": after_stages,
-        "transition_notes": transition_notes if transition_notes else None,
+        "transition_notes": None,
         "is_patient_facing": is_patient_facing,
+        "verification_questions": verification_questions,
+        "safety_triggers": safety_triggers,
     }
+
+
 
 
 def get_parent_id(stage_id: str) -> Optional[str]:
@@ -102,7 +125,7 @@ def main():
     # Paths
     script_dir = Path(__file__).parent
     project_root = script_dir.parent.parent
-    csv_path = project_root / "data" / "Knowledge Base Bank - BreastCancerStages.csv"
+    csv_path = project_root / "data" / "Breast cancer stages" / "Knowledge Base Bank - BreastCancerStagesProcessed.csv"
     json_path = project_root / "data" / "stage_hierarchy.json"
     
     print(f"📂 Reading CSV: {csv_path}")

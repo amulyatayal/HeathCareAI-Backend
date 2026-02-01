@@ -49,7 +49,7 @@ class PatientStageService:
         """
         data_dir = Path(__file__).parent.parent / "data"
         self.json_path = json_path or str(data_dir / "stage_hierarchy.json")
-        self.csv_path = csv_path or str(data_dir / "Knowledge Base Bank - BreastCancerStages.csv")
+        self.csv_path = csv_path or str(data_dir / "Breast cancer stages" / "Knowledge Base Bank - BreastCancerStagesProcessed.csv")
         
         self._stages: Dict[str, TreatmentStage] = {}
         self._root_stages: List[str] = []

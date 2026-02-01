@@ -69,6 +69,17 @@ class TreatmentStage(BaseModel):
         default_factory=list,
         description="Patient-friendly search terms for better embedding matching"
     )
+    
+    # ===== V2.1 Journey Engine Enhancements =====
+    verification_questions: List[str] = Field(
+        default_factory=list,
+        description="Questions to verify patient is in this stage (from CSV 'Patient Facing Questions' column)"
+    )
+    safety_triggers: List[str] = Field(
+        default_factory=list,
+        description="Safety keywords extracted from stage description for chat escalation"
+    )
+
 
 
 class StageTreeNode(BaseModel):

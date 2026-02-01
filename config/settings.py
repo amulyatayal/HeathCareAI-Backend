@@ -7,6 +7,11 @@ import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# This ensures boto3 and other AWS SDKs can find credentials
+load_dotenv()
 
 
 class Settings(BaseSettings):
