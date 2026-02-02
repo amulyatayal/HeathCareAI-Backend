@@ -16,22 +16,22 @@ from services.stage_service_v2_1 import check_for_safety_triggers
 logger = logging.getLogger(__name__)
 
 # Store original method
-_original_chat = None
+_original_process = None
 
 
 def activate_v2_1_features():
     """Patch the orchestrator to include V2.1 features."""
-    global _original_chat
+    global _original_process
     
-    if _original_chat is not None:
+    if _original_process is not None:
         logger.info("V2.1 features already activated")
         return
     
     # Store original
-    _original_chat = PipelineOrchestrator.chat
+    _original_process = PipelineOrchestrator.process
     
     # Create wrapped version
-    async def chat_with_v2_1(self, *args, **kwargs):
+    async def process_with_v2_1(self, *args, **kwargs):
         """Wrapped chat method with V2.1 enhancements."""
         
         # Extract args
@@ -61,15 +61,15 @@ def activate_v2_1_features():
                         # Add to kwargs metadata if exists, or create
                         if 'metadata' not in kwargs:
                              kwargs['metadata'] = {}
-                         kwargs['metadata']['safety_triggers'] = safety_result['matched_keywords']
-                         kwargs['metadata']['emergency_number'] = safety_result['emergency_number']
+                        kwargs['metadata']['safety_triggers'] = safety_result['matched_keywords']
+                        kwargs['metadata']['emergency_number'] = safety_result['emergency_number']
                         kwargs['metadata']['urgent_number'] = safety_result['urgent_number']
             
             except Exception as e:
                 logger.error(f"[V2.1 Safety] Pre-check failed: {e}")
         
         # Call original method
-        result = await _original_chat(self, *args, **kwargs)
+        result = await _original_process(self, *args, **kwargs)
         
         # PHASE 1.5: Inject Verification Questions (V2.1)
         # Check if this is a stage confirmation response
@@ -144,15 +144,15 @@ def activate_v2_1_features():
         return result
     
     # Apply patch
-    PipelineOrchestrator.chat = chat_with_v2_1
+    PipelineOrchestrator.process = process_with_v2_1
     logger.info("✅ V2.1 features activated in orchestrator")
 
 
 def deactivate_v2_1_features():
     """Restore original orchestrator behavior."""
-    global _original_chat
+    global _original_process
     
-    if _original_chat is not None:
-        PipelineOrchestrator.chat = _original_chat
-        _original_chat = None
+    if _original_process is not None:
+        PipelineOrchestrator.process = _original_process
+        _original_process = None
         logger.info("V2.1 features deactivated")
