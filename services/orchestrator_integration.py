@@ -60,10 +60,10 @@ def activate_v2_1_features():
                         )
                         # Add to kwargs metadata if exists, or create
                         if 'metadata' not in kwargs:
-                            kwargs['metadata'] = {}
-                        kwargs['metadata']['safety_triggers'] = safety_result['matched_keywords']
-                        kwargs['metadata']['emergency_number'] = safety_result['emergency_number']
-                       kwargs['metadata']['urgent_number'] = safety_result['urgent_number']
+                             kwargs['metadata'] = {}
+                         kwargs['metadata']['safety_triggers'] = safety_result['matched_keywords']
+                         kwargs['metadata']['emergency_number'] = safety_result['emergency_number']
+                        kwargs['metadata']['urgent_number'] = safety_result['urgent_number']
             
             except Exception as e:
                 logger.error(f"[V2.1 Safety] Pre-check failed: {e}")
