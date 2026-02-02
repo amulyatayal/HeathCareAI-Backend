@@ -1,5 +1,5 @@
 """
-V2.1 Orchestrator Integration - Runtime Patch
+V2.1 Orchestrator Integration - Runtime Patch (FIXED)
 Adds V2.1 features to orchestrator without modifying the original file.
 
 Usage: Import this module in main.py BEFORE starting the server:
@@ -63,7 +63,7 @@ def activate_v2_1_features():
                             kwargs['metadata'] = {}
                         kwargs['metadata']['safety_triggers'] = safety_result['matched_keywords']
                         kwargs['metadata']['emergency_number'] = safety_result['emergency_number']
-                        kwargs['metadata']['urgent_number'] = safety_result['urgent_number']
+                       kwargs['metadata']['urgent_number'] = safety_result['urgent_number']
             
             except Exception as e:
                 logger.error(f"[V2.1 Safety] Pre-check failed: {e}")
@@ -76,10 +76,44 @@ def activate_v2_1_features():
         if hasattr(result, 'response') and result.response:
             if "It sounds like you might be in the" in result.response and "Is that correct?" in result.response:
                 try:
-                    # Extract stage ID from metadata if available
-                    stage_id = getattr(result, 'metadata', {}).get('granular_stage_id')
-                    if not stage_id and hasattr(self, '_last_inferred_stage_id'):
-                        stage_id = self._last_inferred_stage_id
+                    # FIX: Access orchestrator's internal context for granular_stage_id
+                    stage_id = None
+                    
+                    # Method 1: Check orchestrator's _context if available
+                    if hasattr(self, '_context') and hasattr(self._context, 'metadata'):
+                        stage_id = self._context.metadata.get('granular_stage_id')
+                        logger.debug(f"[V2.1] Found stage_id from _context: {stage_id}")
+                    
+                    # Method 2: Extract from stage agent result
+                    if not stage_id and hasattr(self, 'stage_agent'):
+                        try:
+                            from services.agents.stage_agent_v2 import StageAgentV2
+                            # The stage agent might have detailed_stage_id in result
+                            if hasattr(self, '_traces'):
+                                for trace in self._traces:
+                                    if trace.agent == 'stage_agent_v2' and trace.metadata:
+                                        stage_id = trace.metadata.get('detailed_stage_id')
+                                        if stage_id:
+                                            logger.debug(f"[V2.1] Found stage_id from trace: {stage_id}")
+                                            break
+                        except:
+                            pass
+                    
+                    # Method 3: Simple fallback - use stage name to lookup
+                    # Extract stage name from response
+                    if not stage_id:
+                        import re
+                        match = re.search(r'\*\*(.+?)\*\* stage', result.response)
+                        if match:
+                            stage_name = match.group(1)
+                            logger.debug(f"[V2.1] Extracted stage name: {stage_name}")
+                            # Try to find stage by name
+                            stage_service = get_patient_stage_service()
+                            for sid, stage in stage_service._stages.items():
+                                if stage.name.lower() == stage_name.lower():
+                                    stage_id = sid
+                                    logger.debug(f"[V2.1] Found stage_id by name: {stage_id}")
+                                    break
                     
                     if stage_id:
                         stage_service = get_patient_stage_service()
@@ -88,15 +122,24 @@ def activate_v2_1_features():
                         if stage and stage.verification_questions:
                             # Inject first verification question
                             vq = stage.verification_questions[0]
-                            # Replace generic question with CSV question
+                            # Replace generic question with CSV question  
                             result.response = result.response.replace(
                                 "Is that correct?",
                                 f"{vq}"
                             )
-                            logger.info(f"[V2.1 Verification] Injected question for stage {stage_id}")
+                            logger.info(f"[V2.1 Verification] ✅ Injected question for stage {stage_id}: {vq[:50]}...")
+                        else:
+                            if stage:
+                                logger.debug(f"[V2.1] Stage {stage_id} has no verification questions")
+                            else:
+                                logger.debug(f"[V2.1] Stage {stage_id} not found")
+                    else:
+                        logger.debug("[V2.1] Could not determine stage_id for verification question")
                 
                 except Exception as e:
                     logger.error(f"[V2.1 Verification] Question injection failed: {e}")
+                    import traceback
+                    logger.debug(traceback.format_exc())
         
         return result
     
