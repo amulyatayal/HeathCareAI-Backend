@@ -55,6 +55,15 @@ async def lifespan(app: FastAPI):
     logger.info(f"   API Prefix: {settings.api_prefix}")
     logger.info("=" * 60)
     
+    
+    # V2.1 Journey Engine: Activate orchestrator enhancements
+    try:
+        from services.orchestrator_integration import activate_v2_1_features
+        activate_v2_1_features()
+        logger.info("✅ V2.1 Journey Engine features activated")
+    except Exception as e:
+        logger.warning(f"⚠️ V2.1 features not activated: {e}")
+    
     yield
     
     # Shutdown
