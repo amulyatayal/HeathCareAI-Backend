@@ -20,11 +20,14 @@ from typing import Dict, List, Optional, Any
 
 def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
     """Parse a CSV row into a stage dictionary."""
-    # Build hierarchical stage ID from Sub Stage levels
-    group = row.get('Stage Group', '').strip()
+    # CRITICAL: Sub Stage Level columns contain COMPLETE stage IDs (e.g., "1.2.1"), not components!
+    # Find the first non-empty Sub Stage Level value (levels 0-4)
+    stage_group = row.get('Stage Group', '').strip()
     level0 = row.get('Sub Stage Level 0', '').strip()
     level1 = row.get('Sub Stage Level 1', '').strip()
     level2 = row.get('Sub Stage Level 2', '').strip()
+    level3 = row.get('Sub Stage Level 3', '').strip()
+    level4 = row.get('Sub Stage Level 4', '').strip()
     
     name = row.get('Name', '').strip()
     
@@ -32,11 +35,12 @@ def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
     if not name:
         return None
     
-    # Build stage_id from hierarchy (e.g., "2.1.1")
-    parts = [p for p in [group, level0, level1, level2] if p]
-    if not parts:
+    # Use the most specific (deepest) non-empty level, or Stage Group
+    # These columns already contain complete IDs like "1.1", "2.1.1", etc.
+    stage_id = level4 or level3 or level2 or level1 or level0 or stage_group
+    
+    if not stage_id:
         return None
-    stage_id = '.'.join(parts)
     
     # Clean up multiline name
     name = ' '.join(name.split())
