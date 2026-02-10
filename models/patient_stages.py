@@ -79,6 +79,10 @@ class TreatmentStage(BaseModel):
         default_factory=list,
         description="Safety keywords extracted from stage description for chat escalation"
     )
+    patient_facing_label: Optional[str] = Field(
+        None,
+        description="Patient-friendly label (e.g., 'Chemotherapy before surgery' instead of 'Neoadjuvant Chemotherapy')"
+    )
 
 
 

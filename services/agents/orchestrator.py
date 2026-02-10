@@ -258,7 +258,12 @@ class PipelineOrchestrator:
                                 # Look up granular stage name from hierarchy
                                 stage_service = get_patient_stage_service()
                                 stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
-                                friendly_name = stage_obj.name if stage_obj else str(inferred.stage)
+                                # Use patient-facing label with clinical name in brackets when different
+                                if stage_obj:
+                                    label = getattr(stage_obj, 'patient_facing_label', None) or stage_obj.name
+                                    friendly_name = f"{label} ({stage_obj.name})" if label != stage_obj.name else stage_obj.name
+                                else:
+                                    friendly_name = str(inferred.stage)
                                 
                                 # Update BOTH fields in database to prevent repeated prompts
                                 # 1. Update broad stage (current_stage) - this is what users see
@@ -320,7 +325,8 @@ class PipelineOrchestrator:
                             stage_service = get_patient_stage_service()
                             stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
                             if stage_obj:
-                                proposed_name = stage_obj.name
+                                label = getattr(stage_obj, 'patient_facing_label', None) or stage_obj.name
+                                proposed_name = f"{label} ({stage_obj.name})" if label != stage_obj.name else stage_obj.name
                         
                         # Fallback to broad category if granular lookup fails
                         if not proposed_name:
