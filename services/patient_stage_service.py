@@ -379,8 +379,17 @@ class PatientStageService:
         # Build Context
         context = []
         
-        # PRESENT
-        context.append(f"CURRENT STAGE: {stage.name} ({stage.stage_id})")
+        # Get treatment phase (root node name)
+        root_id = stage_id.split('.')[0]
+        root_stage = self.get_stage_by_id(root_id)
+        root_name = root_stage.name if root_stage else ""
+        
+        # PRESENT - Natural language only (no technical IDs!)
+        context.append(f"CURRENT STAGE: {stage.name}")
+        
+        # Add treatment phase if different from stage name
+        if root_name and root_name != stage.name:
+            context.append(f"TREATMENT PHASE: {root_name}")
         
         # Add Journey (Breadcrumb)
         breadcrumb = self.get_breadcrumb(stage_id)
@@ -399,6 +408,12 @@ class PatientStageService:
         elif stage.after_stages:
             next_names = [self.get_stage_by_id(sid).name for sid in stage.after_stages if self.get_stage_by_id(sid)]
             context.append(f"NEXT POSSIBLE STEPS (Progression): {', '.join(next_names)}")
+        
+        # Log stage ID for debugging (not in LLM context!)
+        logger.debug(
+            f"RAG context generated: stage_id={stage.stage_id}, "
+            f"name={stage.name}, root={root_name}"
+        )
             
         return "\n".join(context)
 

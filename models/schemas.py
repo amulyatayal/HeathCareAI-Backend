@@ -279,6 +279,12 @@ class PipelineResponse(BaseModel):
         description="Proposal to change patient stage based on inference"
     )
     
+    # V2.1: Metadata for granular stage tracking and future enhancements
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata (e.g., granular_stage_id for V2.1 verification questions)"
+    )
+    
     class Config:
         use_enum_values = True
 

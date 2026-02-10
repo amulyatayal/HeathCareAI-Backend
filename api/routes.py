@@ -52,11 +52,178 @@ def get_orchestrator() -> PipelineOrchestrator:
     return _orchestrator
 
 
+
+# ================================
+# V2.1 Verification Question Handler
+# ================================
+
+async def _handle_v2_1_verification(
+    response: PipelineResponse,
+    message: str,
+    user_id: Optional[str]
+) -> PipelineResponse:
+    """
+    Handle V2.1 verification questions and user confirmations/rejections.
+    
+    Features:
+    - Inject verification questions when stage confirmation is detected
+    - Handle user confirmations and update profile with granular stage data
+    - Handle user rejections and allow re-classification
+    - Loop prevention via metadata tracking
+    """
+    import re
+    from services.patient_stage_service import get_patient_stage_service
+    from services.patient_profile_service import get_patient_profile_service
+    from services.profile_service_v2_1 import update_stage_with_metadata
+    
+    # PHASE 1: Check if user is responding to previous verification
+    if hasattr(response, 'metadata') and response.metadata:
+        pending_verification = response.metadata.get('verification_asked_for_stage')
+        
+        if pending_verification and message:
+            message_lower = message.lower()
+            
+            # Check for CONFIRMATION keywords
+            confirmation_keywords = ['yes', 'correct', 'confirmed', 'confirm', 'right', 
+                                    'exactly', 'yep', 'yeah', "that's right", 'absolutely']
+            is_confirmed = any(keyword in message_lower for keyword in confirmation_keywords)
+            
+            # Check for REJECTION keywords
+            rejection_keywords = ['no', 'not right', 'incorrect', 'wrong', 'not correct', 
+                                 "that's not", 'nope', 'negative']
+            is_rejected = any(keyword in message_lower for keyword in rejection_keywords)
+            
+            if is_confirmed and user_id:
+                logger.info(f"[V2.1] ✅ User CONFIRMED stage {pending_verification}")
+                
+                try:
+                    profile_service = get_patient_profile_service()
+                    stage_service = get_patient_stage_service()
+                    
+                    # Get stage details
+                    stage_obj = stage_service.get_stage_by_id(pending_verification)
+                    
+                    if stage_obj:
+                        # Get ROOT stage name
+                        root_id = pending_verification.split('.')[0]
+                        root_stage = stage_service.get_stage_by_id(root_id)
+                        root_name = root_stage.name if root_stage else "Unknown Phase"
+                        
+                        # Map granular → broad enum
+                        stage_map = {
+                            '0': PatientStage.PRE_DIAGNOSIS,
+                            '1': PatientStage.NEWLY_DIAGNOSED,
+                            '2': PatientStage.ACTIVE_TREATMENT,
+                            '3': PatientStage.ACTIVE_TREATMENT,
+                            '4': PatientStage.ACTIVE_TREATMENT,
+                            '5': PatientStage.SURVEILLANCE,
+                            '6': PatientStage.ACTIVE_TREATMENT,
+                            '7': PatientStage.ACTIVE_TREATMENT,
+                            '8': PatientStage.ACTIVE_TREATMENT,
+                            '9': PatientStage.ACTIVE_TREATMENT,
+                            '10': PatientStage.ACTIVE_TREATMENT,
+                        }
+                        broad_stage = stage_map.get(root_id, PatientStage.ACTIVE_TREATMENT)
+                        
+                        # Update profile with existing V2.1 method
+                        await update_stage_with_metadata(
+                            profile_service=profile_service,
+                            user_id=user_id,
+                            new_stage=broad_stage,
+                            new_detailed_stage_id=pending_verification,
+                            metadata={
+                                'source': 'verification',
+                                'certainty': 'HIGH',
+                                'user_confirmed': True,
+                                'treatment_type': stage_obj.name,
+                                'transition_notes': 'Confirmed via verification questions'
+                            }
+                        )
+                        
+                        # Also update label field
+                        profile = await profile_service.get_profile(user_id)
+                        profile.detailed_stage_label = stage_obj.name
+                        await profile_service.update_profile(profile)
+                        
+                        logger.info(
+                            f"[V2.1] ✅ Updated profile: broad={broad_stage.value}, "
+                            f"detailed_id={pending_verification}, label={stage_obj.name}"
+                        )
+                        
+                        # Update response
+                        response.response = (
+                            f"✅ Great! I've updated your profile to **{stage_obj.name}** "
+                            f"({root_name}). {response.response}"
+                        )
+                
+                except Exception as e:
+                    logger.error(f"[V2.1] Profile update failed: {e}")
+                
+                # Clear verification state
+                response.metadata['verification_asked_for_stage'] = None
+            
+            elif is_rejected:
+                logger.info(f"[V2.1] ❌ User REJECTED stage {pending_verification}")
+                
+                # Clear verification state
+                response.metadata['verification_asked_for_stage'] = None
+                
+                # Add acknowledgment
+                response.response = "Thanks for letting me know! " + response.response
+    
+    # PHASE 2: Inject verification questions if stage confirmation detected
+    if hasattr(response, 'response') and response.response:
+        if "It sounds like you might be in the" in response.response and "Is that correct?" in response.response:
+            try:
+                logger.info("[V2.1] Pattern matched - stage confirmation detected!")
+                
+                # Extract granular_stage_id from metadata
+                stage_id = None
+                if hasattr(response, 'metadata') and isinstance(response.metadata, dict):
+                    stage_id = response.metadata.get('granular_stage_id')
+                    if stage_id:
+                        logger.info(f"[V2.1] ✅ Found granular_stage_id: {stage_id}")
+                
+                if stage_id:
+                    stage_service = get_patient_stage_service()
+                    stage = stage_service.get_stage_by_id(stage_id)
+                    
+                    if stage and stage.verification_questions:
+                        # Format ALL questions
+                        if len(stage.verification_questions) > 1:
+                            formatted_questions = "\n".join(
+                                f"{i+1}. {q}" 
+                                for i, q in enumerate(stage.verification_questions)
+                            )
+                            vq = f"To confirm, please answer:\n{formatted_questions}"
+                            logger.info(f"[V2.1] Formatted {len(stage.verification_questions)} questions")
+                        else:
+                            vq = stage.verification_questions[0]
+                            logger.info(f"[V2.1] Using single question")
+                        
+                        # Replace "Is that correct?" with verification questions
+                        response.response = re.sub(
+                            r'Is that correct\?',
+                            vq,
+                            response.response
+                        )
+                        
+                        # Track that we asked
+                        response.metadata['verification_asked_for_stage'] = stage_id
+                        logger.info(f"[V2.1] ✅ Injected verification questions for stage {stage_id}")
+                    
+            except Exception as e:
+                logger.error(f"[V2.1] Verification injection failed: {e}")
+    
+    return response
+
+
 # ================================
 # Chat Router (v2 - Multi-Agent Pipeline)
 # ================================
 
 pipeline_router = APIRouter(prefix="/chat", tags=["Chat v2 (Multi-Agent Pipeline)"])
+
 
 
 @pipeline_router.post("/", response_model=PipelineResponse)
@@ -108,6 +275,15 @@ async def chat_v2(
             is_guest=is_guest,
             conversation_history=request.conversation_history,
             include_trace=include_trace or request.include_trace
+        )
+        
+        # ============================================================
+        # V2.1: Inject verification questions and handle confirmations
+        # ============================================================
+        response = await _handle_v2_1_verification(
+            response=response,
+            message=request.message,
+            user_id=user_id
         )
         
         # Calculate total latency

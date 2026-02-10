@@ -1,0 +1,177 @@
+{
+  "timestamp": "2026-02-09T22:46:36",
+  "backend_url": "http://localhost:8000",
+  "total": 5,
+  "passed": 4,
+  "failed": 1,
+  "v2_1_activation_rate": "4/5",
+  "results": [
+    {
+      "name": "Surgery: Lumpectomy",
+      "message": "I had a lumpectomy yesterday and I'm recovering at home",
+      "passed": true,
+      "stage": "active_treatment",
+      "granular_stage_id": "2.1.1.1",
+      "latency_ms": 37323,
+      "response_preview": "As you're moving forward through treatment, I understand you may have many questions about recovering from your recent lumpectomy surgery.\n\n**From the sources:**\n\n> \"Any support you may need after you",
+      "checks": {
+        "broad_stage": {
+          "passed": true,
+          "detail": "expected='active_treatment', got='active_treatment'"
+        },
+        "has_granular_id": {
+          "passed": true,
+          "detail": "granular_stage_id=\u2705 2.1.1.1"
+        },
+        "granular_prefix": {
+          "passed": true,
+          "detail": "expected prefix='2.1', got='2.1.1.1'"
+        },
+        "granular_exact": {
+          "passed": true,
+          "detail": "expected='2.1.1.1', got='2.1.1.1'"
+        },
+        "contains_lumpectomy": {
+          "passed": true,
+          "detail": "'lumpectomy' found in response"
+        },
+        "has_response": {
+          "passed": true,
+          "detail": "response length=1636 chars"
+        },
+        "v2_1_flow_active": {
+          "passed": true,
+          "detail": "granular_id='2.1.1.1' \u2192 \u2705 V2.1 ACTIVE (sub-stage)"
+        }
+      }
+    },
+    {
+      "name": "Surgery: Mastectomy",
+      "message": "I'm scheduled for a mastectomy next week and feeling anxious",
+      "passed": false,
+      "stage": "active_treatment",
+      "granular_stage_id": null,
+      "latency_ms": 1776,
+      "response_preview": "Can you tell me more about the specific concerns or questions you have about the mastectomy procedure?",
+      "checks": {
+        "broad_stage": {
+          "passed": true,
+          "detail": "expected='active_treatment', got='active_treatment'"
+        },
+        "has_granular_id": {
+          "passed": false,
+          "detail": "granular_stage_id=\u274c MISSING"
+        },
+        "granular_prefix": {
+          "passed": false,
+          "detail": "expected prefix='2.1', but no granular_id returned"
+        },
+        "has_response": {
+          "passed": true,
+          "detail": "response length=102 chars"
+        },
+        "v2_1_flow_active": {
+          "passed": false,
+          "detail": "\u274c No granular_id \u2192 OLD FLOW"
+        }
+      }
+    },
+    {
+      "name": "Surgery: Reconstruction",
+      "message": "I just had breast reconstruction surgery after my mastectomy",
+      "passed": true,
+      "stage": "active_treatment",
+      "granular_stage_id": "2.1.2.2",
+      "latency_ms": 15324,
+      "response_preview": "I understand treatment can bring many questions and concerns. As you recover from your recent breast reconstruction surgery, here are some relevant details from trusted medical sources:\n\n**From the so",
+      "checks": {
+        "broad_stage": {
+          "passed": true,
+          "detail": "expected='active_treatment', got='active_treatment'"
+        },
+        "has_granular_id": {
+          "passed": true,
+          "detail": "granular_stage_id=\u2705 2.1.2.2"
+        },
+        "granular_prefix": {
+          "passed": true,
+          "detail": "expected prefix='2', got='2.1.2.2'"
+        },
+        "has_response": {
+          "passed": true,
+          "detail": "response length=1676 chars"
+        },
+        "v2_1_flow_active": {
+          "passed": true,
+          "detail": "granular_id='2.1.2.2' \u2192 \u2705 V2.1 ACTIVE (sub-stage)"
+        }
+      }
+    },
+    {
+      "name": "Chemotherapy: General",
+      "message": "I'm starting chemotherapy next week, what should I expect?",
+      "passed": true,
+      "stage": "active_treatment",
+      "granular_stage_id": "3.1",
+      "latency_ms": 18443,
+      "response_preview": "I understand treatment can bring many questions and concerns. As you prepare to start chemotherapy, here are some relevant quotes from trusted medical sources about what to expect:\n\n> \"Before starting",
+      "checks": {
+        "broad_stage": {
+          "passed": true,
+          "detail": "expected='active_treatment', got='active_treatment'"
+        },
+        "has_granular_id": {
+          "passed": true,
+          "detail": "granular_stage_id=\u2705 3.1"
+        },
+        "granular_prefix": {
+          "passed": true,
+          "detail": "expected prefix='3', got='3.1'"
+        },
+        "contains_chemotherapy": {
+          "passed": true,
+          "detail": "'chemotherapy' found in response"
+        },
+        "has_response": {
+          "passed": true,
+          "detail": "response length=1634 chars"
+        },
+        "v2_1_flow_active": {
+          "passed": true,
+          "detail": "granular_id='3.1' \u2192 \u2705 V2.1 ACTIVE (sub-stage)"
+        }
+      }
+    },
+    {
+      "name": "Chemotherapy: Side effects",
+      "message": "I'm on my third cycle of chemo and feeling very nauseous",
+      "passed": true,
+      "stage": "active_treatment",
+      "granular_stage_id": "3.1",
+      "latency_ms": 13507,
+      "response_preview": "I understand treatment can bring many questions and concerns. Managing side effects like nausea is an important part of your care. From the sources:\n\n> \"You may feel sick or be sick during and after y",
+      "checks": {
+        "broad_stage": {
+          "passed": true,
+          "detail": "expected='active_treatment', got='active_treatment'"
+        },
+        "has_granular_id": {
+          "passed": true,
+          "detail": "granular_stage_id=\u2705 3.1"
+        },
+        "granular_prefix": {
+          "passed": true,
+          "detail": "expected prefix='3', got='3.1'"
+        },
+        "has_response": {
+          "passed": true,
+          "detail": "response length=1707 chars"
+        },
+        "v2_1_flow_active": {
+          "passed": true,
+          "detail": "granular_id='3.1' \u2192 \u2705 V2.1 ACTIVE (sub-stage)"
+        }
+      }
+    }
+  ]
+}

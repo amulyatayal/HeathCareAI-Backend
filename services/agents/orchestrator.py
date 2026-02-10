@@ -19,6 +19,7 @@ from services.agents.video_retrieval_agent import VideoRetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
 from services.patient_profile_service import get_patient_profile_service
+from services.patient_stage_service import get_patient_stage_service
 from models.schemas import (
     PipelineContext,
     PipelineResponse,
@@ -244,19 +245,10 @@ class PipelineOrchestrator:
                             # StageAgentV2 metadata has granular_id.
                             
                             if inferred_stage_id:
-                                # Map broad stage enum to user-friendly display name
-                                # This matches what users see on the onboarding page
-                                stage_display_names = {
-                                    PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
-                                    PatientStage.AWAITING_RESULTS: "Awaiting Results",
-                                    PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
-                                    PatientStage.ACTIVE_TREATMENT: "Active Treatment",
-                                    PatientStage.POST_TREATMENT: "Post-Treatment",
-                                    PatientStage.SURVEILLANCE: "Surveillance",
-                                    PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
-                                    PatientStage.UNKNOWN: "Unknown"
-                                }
-                                friendly_name = stage_display_names.get(inferred.stage, str(inferred.stage))
+                                # Look up granular stage name from hierarchy
+                                stage_service = get_patient_stage_service()
+                                stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
+                                friendly_name = stage_obj.name if stage_obj else str(inferred.stage)
                                 
                                 # Update BOTH fields in database to prevent repeated prompts
                                 # 1. Update broad stage (current_stage) - this is what users see
@@ -308,18 +300,27 @@ class PipelineOrchestrator:
                     else:
                         # We haven't asked yet.
                         # STOP PIPELINE. Ask Confirmation.
-                        # Use broad category display name (matches onboarding page)
-                        stage_display_names = {
-                            PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
-                            PatientStage.AWAITING_RESULTS: "Awaiting Results",
-                            PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
-                            PatientStage.ACTIVE_TREATMENT: "Active Treatment",
-                            PatientStage.POST_TREATMENT: "Post-Treatment",
-                            PatientStage.SURVEILLANCE: "Surveillance",
-                            PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
-                            PatientStage.UNKNOWN: "Unknown"
-                        }
-                        proposed_name = stage_display_names.get(inferred.stage, str(inferred.stage))
+                        # Look up granular stage name from hierarchy for specific, patient-friendly prompt
+                        proposed_name = None
+                        if inferred_stage_id:
+                            stage_service = get_patient_stage_service()
+                            stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
+                            if stage_obj:
+                                proposed_name = stage_obj.name
+                        
+                        # Fallback to broad category if granular lookup fails
+                        if not proposed_name:
+                            stage_display_names = {
+                                PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
+                                PatientStage.AWAITING_RESULTS: "Awaiting Results",
+                                PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
+                                PatientStage.ACTIVE_TREATMENT: "Active Treatment",
+                                PatientStage.POST_TREATMENT: "Post-Treatment",
+                                PatientStage.SURVEILLANCE: "Surveillance",
+                                PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
+                                PatientStage.UNKNOWN: "Unknown"
+                            }
+                            proposed_name = stage_display_names.get(inferred.stage, str(inferred.stage))
                         
                         logger.info(f"Proposing stage change: {profile.current_stage} -> {proposed_name}")
                         
@@ -337,7 +338,8 @@ class PipelineOrchestrator:
                             trace=self._traces if include_trace else [],
                             total_latency_ms=total_latency,
                             needs_onboarding=needs_onboarding,
-                            sign_in_suggestion=None
+                            sign_in_suggestion=None,
+                            metadata=ctx.metadata
                         )
             
             # Check for early abort (e.g., clarification needed)
@@ -629,7 +631,8 @@ class PipelineOrchestrator:
             total_latency_ms=total_latency,
             needs_onboarding=needs_onboarding,
             sign_in_suggestion=self._get_sign_in_suggestion(ctx, is_guest),
-            modification_proposal=modification_proposal
+            modification_proposal=modification_proposal,
+            metadata=ctx.metadata
         )
         
         logger.info(f"Orchestrator: PipelineResponse created with {len(response.suggested_videos)} suggested_videos")

@@ -221,6 +221,10 @@ class PatientProfile(BaseModel):
         None,
         description="When detailed stage was last updated"
     )
+    detailed_stage_label: Optional[str] = Field(
+        None,
+        description="Patient-facing stage name (e.g., 'Wide local excision')"
+    )
     
     # ===== V2.1 Journey Engine Enhancements =====
     
