@@ -213,8 +213,18 @@ class PipelineOrchestrator:
                 inferred_stage_id = ctx.metadata.get("granular_stage_id")
                 
                 # Check for High Certainty Mismatch
-                if (inferred and inferred.stage != PatientStage.UNKNOWN and 
-                    inferred.stage != profile.current_stage and 
+                # Compare BOTH: broad enum (pre_diagnosis→active_treatment) AND
+                # root group (surgery→chemo) to catch within-ACTIVE_TREATMENT transitions
+                broad_changed = (inferred and inferred.stage != PatientStage.UNKNOWN and 
+                    inferred.stage != profile.current_stage)
+                
+                # Root group = first digit of granular ID (e.g., "2.1.1" → "2", "3.1" → "3")
+                current_root = (getattr(profile, 'detailed_stage_id', None) or "").split(".")[0]
+                inferred_root = (inferred_stage_id or "").split(".")[0]
+                group_changed = (inferred_root and current_root and inferred_root != current_root)
+                
+                if (inferred and inferred.stage != PatientStage.UNKNOWN and
+                    (broad_changed or group_changed) and
                     inferred.certainty == CertaintyLevel.HIGH):
                     
                     # 1. Loop Prevention: Did we just ask about this?
