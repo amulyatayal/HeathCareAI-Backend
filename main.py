@@ -9,31 +9,7 @@ Features:
 - AWS-hosted (Bedrock, OpenSearch, S3)
 """
 
-# ================================
-# V2.1 Journey Engine - MUST ACTIVATE FIRST!
-# ================================
-# Patch orchestrator BEFORE routes.py creates singleton!
-print("=" * 60)
-print("MAIN.PY: About to activate V2.1...")
-try:
-    from services.orchestrator_integration import activate_v2_1_features
-    from services.agents.orchestrator import PipelineOrchestrator
-    
-    print(f"MAIN.PY: Before activation - PipelineOrchestrator.process = {PipelineOrchestrator.process.__name__}")
-    # TEMPORARILY DISABLED - Moving logic to API route to fix Content-Length error
-    # activate_v2_1_features()
-    print(f"MAIN.PY: After activation - PipelineOrchestrator.process = {PipelineOrchestrator.process.__name__}")
-    
-    if hasattr(PipelineOrchestrator.process, '_original'):
-        print("✅ MAIN.PY: V2.1 wrapper VERIFIED installed!")
-    else:
-        print("❌ MAIN.PY: V2.1 wrapper NOT installed!")
-        
-except Exception as e:
-    print(f"⚠️ MAIN.PY: V2.1 activation failed: {e}")
-    import traceback
-    traceback.print_exc()
-print("=" * 60)
+
 
 import logging
 import sys
