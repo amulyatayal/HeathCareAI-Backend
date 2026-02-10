@@ -56,6 +56,10 @@ def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
     # Parse patient facing flag - assume all are patient facing
     is_patient_facing = True
     
+    # Extract patient-facing label (user-friendly name for display)
+    patient_facing_label = row.get('Patient Facing Label', '').strip()
+    patient_facing_label = ' '.join(patient_facing_label.split()) if patient_facing_label else name
+    
     # ===== V2.1: Extract Verification Questions =====
     verification_questions = []
     questions_raw = row.get('Patient Facing Questions', '').strip()
@@ -92,6 +96,7 @@ def parse_csv_row(row: dict) -> Optional[Dict[str, Any]]:
         "is_patient_facing": is_patient_facing,
         "verification_questions": verification_questions,
         "safety_triggers": safety_triggers,
+        "patient_facing_label": patient_facing_label,
     }
 
 
