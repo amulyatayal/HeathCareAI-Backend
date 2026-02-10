@@ -254,8 +254,12 @@ class PipelineOrchestrator:
                                 # 1. Update broad stage (current_stage) - this is what users see
                                 await profile_service.update_stage(user_id, inferred.stage)
                                 
-                                # 2. Update detailed stage (detailed_stage_id) - for internal granular tracking and RAG
-                                await profile_service.update_stage_detailed(user_id, inferred_stage_id)
+                                # 2. Update detailed stage (detailed_stage_id) + label - for granular tracking and RAG
+                                await profile_service.update_stage_detailed(
+                                    user_id, 
+                                    inferred_stage_id,
+                                    detailed_stage_label=friendly_name if stage_obj else None
+                                )
                                 
                                 stage_update_message = f"Thanks, I've updated your stage to **{friendly_name}**."
                                 logger.info(f"Setting stage_update_message: {stage_update_message}")

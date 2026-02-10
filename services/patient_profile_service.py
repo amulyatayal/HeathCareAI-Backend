@@ -253,7 +253,8 @@ class PatientProfileService:
     async def update_stage_detailed(
         self, 
         user_id: str, 
-        detailed_stage_id: str
+        detailed_stage_id: str,
+        detailed_stage_label: str = None
     ) -> PatientProfile:
         """
         Update patient's detailed treatment stage from hierarchical pathway.
@@ -261,6 +262,7 @@ class PatientProfileService:
         Args:
             user_id: Firebase UID from JWT token
             detailed_stage_id: Stage ID from treatment pathway (e.g., '2.1.1')
+            detailed_stage_label: Optional human-readable name (e.g., 'Wide local excision')
             
         Returns:
             Updated PatientProfile
@@ -278,6 +280,10 @@ class PatientProfileService:
         profile.detailed_stage_id = detailed_stage_id
         profile.detailed_stage_updated_at = now
         profile.updated_at = now
+        
+        # Store label if provided
+        if detailed_stage_label:
+            profile.detailed_stage_label = detailed_stage_label
         
         try:
             self.table.put_item(Item=profile.to_dynamodb_item())
