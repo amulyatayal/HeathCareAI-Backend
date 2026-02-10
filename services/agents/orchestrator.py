@@ -20,7 +20,7 @@ from services.agents.reasoning_agent import get_reasoning_agent
 from services.agents.validator_agent import ValidatorAgent
 from services.patient_profile_service import get_patient_profile_service
 from services.patient_stage_service import get_patient_stage_service
-from models.schemas import (
+from models.schemas_pipeline import (
     PipelineContext,
     PipelineResponse,
     AgentTrace,

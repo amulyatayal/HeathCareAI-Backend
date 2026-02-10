@@ -1,8 +1,8 @@
 # Stage Classification & Orchestration Architecture (V2)
 
 **Version**: 2.1  
-**Date**: 2026-02-01 (Design) | 2026-02-09 (Implemented)  
-**Status**: ✅ V2.0 Implemented + V2.1 Implemented & Verified  
+**Date**: 2026-02-01 (Design) | 2026-02-09 (Implemented) | 2026-02-10 (Refactored)  
+**Status**: ✅ V2.0 Implemented + V2.1 Implemented & Verified + Codebase Refactored  
 
 ## 1. Overview
 This document details the refactored architecture for identifying and confirming a patient's treatment stage in the app 
@@ -416,3 +416,131 @@ Quick run (5 cases): **80% V2.1 activation rate** — 4/5 responses returned gra
 - **Confidence Calibration**: Track confirmation accuracy to fine-tune certainty thresholds.
 - **ML-based Safety Detection**: Upgrade from keyword matching to NLP-based context understanding for safety triggers.
 - **Analytics Infrastructure**: `StageMismatch` DynamoDB table, mismatch logging, weekly analysis cron jobs, quality dashboards.
+
+## 14. Codebase Refactoring & File Reorganization (2026-02-10)
+
+**Status**: ✅ Completed  
+**Rollback**: `git tag pre-file-reorg-stable`
+
+### 14.1 Problem Statement
+
+The codebase had accumulated confusing naming conventions:
+- Files labeled `_deprecated` (e.g., `schemas_deprecated.py`, `routes_deprecated.py`) were **actively used** by 6+ modules
+- `schemas.py` and `routes.py` gave no indication of *what domain* they served
+- V1/V2 labeling was misleading — the "deprecated" files were actually the **RAG/Chat** layer, while `schemas.py`/`routes.py` were the **pipeline** layer
+- An early attempt to archive these files to `_archive/` broke 19 import statements across the codebase
+
+### 14.2 Root Cause Analysis
+
+| File | Label Implied | Actual Purpose |
+|------|--------------|----------------|
+| `models/schemas_deprecated.py` | Old, unused | **Active** RAG/chat models (ChatRequest, ChatResponse, KnowledgeDocument, SourceCitation) |
+| `models/schemas.py` | Current, general | Pipeline-specific models (PipelineContext, IntentResult, StageResult, PipelineResponse) |
+| `api/routes_deprecated.py` | Old, unused | **Active** RAG routes: chat, knowledge, health, categories (4 routers) |
+| `api/routes.py` | Current, general | Pipeline routes: pipeline, health_v2, debug (3 routers) |
+
+### 14.3 Solution: Domain-Based Naming
+
+Renamed all files by **purpose/domain** instead of version:
+
+#### Models
+
+| Before | After | Contents |
+|--------|-------|----------|
+| `models/schemas_deprecated.py` | `models/schemas_rag.py` | ChatRequest, ChatResponse, SourceCitation, KnowledgeDocument, KnowledgeSearchRequest, FeedbackRequest, HealthCheckResponse, QueryCategory, ContentType, MessageRole |
+| `models/schemas.py` | `models/schemas_pipeline.py` | PipelineRequest, PipelineResponse, PipelineContext, IntentResult, StageResult, ReasoningResult, RetrievalResult, ValidationResult, AgentTrace, AgentStatus |
+
+#### Routes
+
+| Before | After | Routers |
+|--------|-------|---------|
+| `api/routes_deprecated.py` | `api/routes_chat.py` | `chat_router` — POST /chat, POST /chat/feedback, DELETE /chat/session/{id} |
+| `api/routes_deprecated.py` | `api/routes_knowledge.py` | `knowledge_router` — POST /knowledge/search, POST/DELETE /knowledge/document, GET /knowledge/stats, GET /knowledge/indexes; `categories_router` — GET /categories/query, GET /categories/content |
+| `api/routes_deprecated.py` | `api/routes_health.py` | `health_router` — GET /health, GET /health/ping |
+| `api/routes.py` | `api/routes_pipeline.py` | `pipeline_router`, `health_v2_router`, `debug_router` + V2.1 verification logic |
+
+### 14.4 Import Updates (21 statements across 17 files)
+
+**RAG schema imports** (`schemas_deprecated` → `schemas_rag`):
+- `models/__init__.py`
+- `services/ai_agent.py`
+- `services/knowledge_base.py`
+- `scripts/opensearch/ingest_csv_to_opensearch.py`
+- `scripts/opensearch/ingest_qa_data.py`
+
+**Pipeline schema imports** (`models.schemas` → `models.schemas_pipeline`):
+- `api/routes_pipeline.py`
+- `services/agents/base_agent.py`
+- `services/agents/intent_agent.py`
+- `services/agents/stage_agent_v2.py`
+- `services/agents/retrieval_agent.py`
+- `services/agents/reasoning_agent.py`
+- `services/agents/validator_agent.py`
+- `services/agents/video_retrieval_agent.py`
+- `services/agents/orchestrator.py`
+- `scripts/stage_hierarchy/verify_integration.py` (2 imports)
+- `tests/stage_classification/test_int_stage_personalization.py`
+- `tests/stage_classification/test_stage_agent.py`
+
+**Route imports** (`api/__init__.py`):
+```diff
+-from .routes_deprecated import (chat_router, knowledge_router, health_router, categories_router)
+-from .routes import (pipeline_router, health_v2_router, debug_router)
++from .routes_chat import chat_router
++from .routes_knowledge import knowledge_router, categories_router
++from .routes_health import health_router
++from .routes_pipeline import pipeline_router, health_v2_router, debug_router
+```
+
+### 14.5 Other Refactoring (Pre-Reorg)
+
+| Change | Details |
+|--------|---------|
+| Build script fix | Updated `scripts/stage_hierarchy/build.py` CSV path |
+| Test file relocation | Moved eval/test files to `tests/stage_classification/` |
+| V2.1 extension consolidation | Merged `v2_1_extensions.py` functions into main service classes |
+| Dead code removal | Deleted unused files identified via import analysis |
+| Import verification | Validated all imports after each change |
+
+### 14.6 Current File Structure (Post-Refactoring)
+
+```
+models/
+├── __init__.py              # Re-exports from schemas_rag
+├── schemas_rag.py           # RAG/Chat domain models
+├── schemas_pipeline.py      # Pipeline domain models
+├── patient_profile.py       # Patient profile model
+└── patient_stages.py        # TreatmentStage model
+
+api/
+├── __init__.py              # Central router wiring
+├── routes_chat.py           # Chat, feedback, session endpoints
+├── routes_knowledge.py      # Knowledge search, documents, indexes, categories
+├── routes_health.py         # Service health checks
+├── routes_pipeline.py       # Multi-agent pipeline + V2.1 verification
+├── profile_routes.py        # Patient profile endpoints
+└── forum_routes.py          # Forum/community endpoints
+
+services/
+├── ai_agent.py              # Single-agent RAG chat (uses schemas_rag)
+├── knowledge_base.py        # Knowledge base service (uses schemas_rag)
+├── patient_stage_service.py # Stage hierarchy + RAG context
+├── patient_profile_service.py
+└── agents/
+    ├── orchestrator.py      # Pipeline orchestrator (uses schemas_pipeline)
+    ├── stage_agent_v2.py    # LLM stage inference
+    ├── intent_agent.py      # Intent classification
+    ├── reasoning_agent.py   # Medical reasoning
+    ├── retrieval_agent.py   # RAG retrieval
+    ├── validator_agent.py   # Safety validation
+    ├── video_retrieval_agent.py
+    └── base_agent.py        # Agent base class
+```
+
+### 14.7 Verification Results
+
+- ✅ `grep -rn "schemas_deprecated\|routes_deprecated"` → **0 results**
+- ✅ All 6 critical import chains verified (schemas_rag, schemas_pipeline, 4 route modules)
+- ✅ Server starts cleanly with `uvicorn main:app`
+- ✅ No breaking changes to API endpoints or behavior
+

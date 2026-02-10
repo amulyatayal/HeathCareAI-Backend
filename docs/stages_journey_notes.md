@@ -1415,3 +1415,171 @@ The original V2.1 design used `activate_v2_1_features()` to monkey-patch `Pipeli
 **V2 Architecture**:
 - 🏗️ [stage_classification_v2_design.md](stage_classification_v2_design.md) - V2 architecture + V2.1 enhancements
 - 🔄 [V1 Design](stage_classification_design.md) - **DEPRECATED** (V1 architecture, replaced by V2)
+
+---
+
+## Codebase Refactoring & File Reorganization (2026-02-10)
+
+**Status**: ✅ Completed  
+**Rollback Tag**: `pre-file-reorg-stable`
+
+### Context & Motivation
+
+After V2.1 implementation, the codebase had accumulated naming debt:
+
+1. **"Deprecated" ≠ Deprecated**: `schemas_deprecated.py` and `routes_deprecated.py` were labeled as deprecated during V2 development but remained **actively imported by 6+ modules** — they are the live RAG/Chat API layer
+2. **Generic Names**: `schemas.py` and `routes.py` gave no indication they served the *pipeline* domain specifically
+3. **Broken Archive Attempt**: An initial attempt to move "deprecated" files to `_archive/` broke 19 import statements, requiring emergency rollback and restoration
+
+### Root Cause: V1/V2 Naming Confusion
+
+The confusion arose from a naming convention where:
+- `schemas.py` / `routes.py` = "current" (pipeline/V2)
+- `schemas_deprecated.py` / `routes_deprecated.py` = "old" (RAG/V1 chat)
+
+But both layers are **equally active and necessary**:
+- The RAG layer handles direct chat, knowledge search, health checks, and feedback
+- The pipeline layer handles the multi-agent pipeline with intent → stage → retrieval → reasoning → validation
+
+### Solution: Domain-Based Naming
+
+All files renamed by **function/domain** instead of version label:
+
+#### Schema Files
+
+| Before | After | Domain | Key Models |
+|--------|-------|--------|-----------|
+| `schemas_deprecated.py` | **`schemas_rag.py`** | RAG/Chat | ChatRequest, ChatResponse, SourceCitation, KnowledgeDocument, KnowledgeSearchRequest, FeedbackRequest, HealthCheckResponse |
+| `schemas.py` | **`schemas_pipeline.py`** | Multi-Agent Pipeline | PipelineRequest, PipelineResponse, PipelineContext, IntentResult, StageResult, ReasoningResult, RetrievalResult, ValidationResult, AgentTrace |
+
+#### Route Files
+
+| Before | After | Routers Contained |
+|--------|-------|-------------------|
+| `routes_deprecated.py` (monolith) | **`routes_chat.py`** | `chat_router` — chat, feedback, session management |
+| `routes_deprecated.py` (monolith) | **`routes_knowledge.py`** | `knowledge_router` + `categories_router` — search, documents, indexes |
+| `routes_deprecated.py` (monolith) | **`routes_health.py`** | `health_router` — service health checks |
+| `routes.py` | **`routes_pipeline.py`** | `pipeline_router`, `health_v2_router`, `debug_router` + V2.1 verification |
+
+### Import Update Scope
+
+**21 import statements** updated across **17 files**:
+
+- **5 files** updated from `schemas_deprecated` → `schemas_rag` (models/__init__.py, ai_agent.py, knowledge_base.py, 2 ingest scripts)
+- **13 files** updated from `models.schemas` → `models.schemas_pipeline` (all agents, pipeline routes, test files, verify_integration.py)
+- **api/__init__.py** rewired from version-labeled sections ("v1 deprecated" / "v2 new") to domain-labeled sections ("RAG / Chat" / "Pipeline")
+
+### Prior Refactoring Steps (Same Session)
+
+These changes were completed before the file reorganization:
+
+| Step | Change | Files |
+|------|--------|-------|
+| Checkpoint | `git tag pre-refactor-stable` | — |
+| Build script fix | Updated CSV path in `build.py` | 1 |
+| Test relocation | Moved eval/test files → `tests/stage_classification/` | 4 |
+| V2.1 consolidation | Merged `v2_1_extensions.py` into main services | 3 |
+| Dead code removal | Deleted unused/orphaned files | 5 |
+| Import verification | Validated all imports pass | — |
+| File reorg checkpoint | `git tag pre-file-reorg-stable` | — |
+| Model renames | `schemas_deprecated` → `schemas_rag`, `schemas` → `schemas_pipeline` | 2 |
+| Route split | `routes_deprecated` → 3 files, `routes` → `routes_pipeline` | 5 |
+| Import updates | All 21 statements across 17 files | 17 |
+
+### Final Project Structure
+
+```
+HeathCareAI-Backend/
+├── main.py                         # FastAPI app entry point
+│
+├── models/
+│   ├── __init__.py                 # Re-exports from schemas_rag
+│   ├── schemas_rag.py              # [was schemas_deprecated.py] RAG/Chat models
+│   ├── schemas_pipeline.py         # [was schemas.py] Pipeline models
+│   ├── patient_profile.py          # Patient profile (13 V2.1 fields)
+│   └── patient_stages.py           # TreatmentStage model (verification_questions, safety_triggers)
+│
+├── api/
+│   ├── __init__.py                 # Central router registry
+│   ├── routes_chat.py              # [from routes_deprecated.py] Chat + feedback + sessions
+│   ├── routes_knowledge.py         # [from routes_deprecated.py] Knowledge search + categories
+│   ├── routes_health.py            # [from routes_deprecated.py] Health checks
+│   ├── routes_pipeline.py          # [was routes.py] Pipeline + V2.1 verification
+│   ├── profile_routes.py           # Patient profile CRUD
+│   └── forum_routes.py             # Community/forum
+│
+├── config/
+│   ├── pipeline_config.py          # PatientStage enum, IntentCategory, ModelType
+│   ├── agent_routing.py            # Agent type routing config
+│   └── aws.py                      # AWS service clients
+│
+├── services/
+│   ├── ai_agent.py                 # Single-agent RAG chat (imports schemas_rag)
+│   ├── knowledge_base.py           # RAG knowledge base (imports schemas_rag)
+│   ├── patient_stage_service.py    # Stage hierarchy, RAG context, safety triggers
+│   ├── patient_profile_service.py  # Profile persistence + regression detection
+│   ├── conversation_logger.py      # DynamoDB conversation logging
+│   └── agents/
+│       ├── orchestrator.py         # Pipeline orchestrator (imports schemas_pipeline)
+│       ├── stage_agent_v2.py       # LLM stage inference
+│       ├── intent_agent.py         # Intent classification
+│       ├── reasoning_agent.py      # Medical reasoning + RAG context
+│       ├── retrieval_agent.py      # Document retrieval
+│       ├── validator_agent.py      # Safety validation
+│       ├── video_retrieval_agent.py
+│       └── base_agent.py           # Agent ABC + tracing
+│
+├── data/
+│   ├── stage_hierarchy.json        # Generated from CSV (59 stages)
+│   └── Breast cancer stages/
+│       └── BreastCancerStagesProcessed.csv  # Canonical source
+│
+├── scripts/
+│   ├── stage_hierarchy/
+│   │   ├── build.py                # CSV → JSON generator
+│   │   └── verify_integration.py   # E2E verification
+│   └── opensearch/
+│       ├── ingest_csv_to_opensearch.py
+│       └── ingest_qa_data.py
+│
+├── tests/
+│   ├── stage_classification/
+│   │   ├── eval_stage_classification_flows.py
+│   │   ├── test_stage_agent.py
+│   │   └── test_int_stage_personalization.py
+│   └── eval_v2_1_flows.py          # V2.1 granular stage eval
+│
+└── docs/
+    ├── stage_classification_v2_design.md  # This companion doc
+    └── stages_journey_notes.md            # This file
+```
+
+### Lessons Learned
+
+1. **Never label active code as "deprecated"** — use domain names from the start
+2. **Split monolith route files early** — `routes_deprecated.py` had 4 unrelated routers
+3. **Run `grep -rn` before renaming** — find all import chains first
+4. **Git tags before refactoring** — `pre-refactor-stable` and `pre-file-reorg-stable` made rollbacks safe
+5. **Test imports programmatically** — `python3 -c "from module import ..."` catches issues faster than server start
+
+### Verification
+
+- ✅ Zero stale references to old file names (`grep -rn "schemas_deprecated\|routes_deprecated"`)
+- ✅ All 6 critical import chains verified
+- ✅ Server starts cleanly with `uvicorn main:app`
+- ✅ No API endpoint changes (same URLs, same behavior)
+- ✅ Two rollback checkpoints available
+
+---
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-01-31 | Initial document creation (V2.1 design) |
+| 2026-02-01 | Added CSV alignment, profile enhancements, regression detection |
+| 2026-02-01 | Finalized V2.1 scope, excluded analytics |
+| 2026-02-01 | **AUTHORITATIVE VERSION** - All discussions consolidated |
+| 2026-02-09 | V2.1 implementation completed, bugs resolved, eval results added |
+| 2026-02-10 | **Codebase refactoring** - Domain-based file naming, route splitting, dead code removal |
+

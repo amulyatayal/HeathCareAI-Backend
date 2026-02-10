@@ -1,21 +1,17 @@
 """API module"""
 
 # ================================
-# v1 API Routes (Deprecated - Single Agent)
+# RAG / Chat Routes
 # ================================
-# Still functional for backward compatibility
-from .routes_deprecated import (
-    chat_router,
-    knowledge_router, 
-    health_router,
-    categories_router
-)
+from .routes_chat import chat_router
+from .routes_knowledge import knowledge_router, categories_router
+from .routes_health import health_router
 from .forum_routes import forum_router
 
 # ================================
-# v2 API Routes (New - Multi-Agent Pipeline)
+# Pipeline Routes (Multi-Agent)
 # ================================
-from .routes import (
+from .routes_pipeline import (
     pipeline_router,
     health_v2_router,
     debug_router
@@ -23,15 +19,16 @@ from .routes import (
 from .profile_routes import router as profile_router
 
 __all__ = [
-    # v1 (deprecated)
+    # RAG / Chat
     'chat_router',
     'knowledge_router', 
     'health_router',
     'categories_router',
     'forum_router',
-    # v2 (new)
+    # Pipeline
     'pipeline_router',
     'health_v2_router',
     'debug_router',
     'profile_router',
 ]
+

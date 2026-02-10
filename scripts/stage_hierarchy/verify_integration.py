@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from services.agents.orchestrator import PipelineOrchestrator
-from models.schemas import StageResult, IntentResult, AgentTrace, AgentStatus, PipelineContext
+from models.schemas_pipeline import StageResult, IntentResult, AgentTrace, AgentStatus, PipelineContext
 
 async def main():
     print("\n--- Verifying Orchestrator Chat Confirmation (Loop Prevention) ---\n")
@@ -52,7 +52,7 @@ async def main():
         orchestrator.intent_agent.run = AsyncMock(side_effect=mock_intent_run)
 
         async def mock_skip_phase(ctx):
-            from models.schemas import RetrievalResult
+            from models.schemas_pipeline import RetrievalResult
             if not ctx.retrieval_result:
                 ctx.retrieval_result = RetrievalResult(chunks=[], total_retrieved=0)
             return ctx, AgentTrace(agent_name="mock", status=AgentStatus.SKIPPED, latency_ms=0)

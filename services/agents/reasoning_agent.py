@@ -13,7 +13,7 @@ from services.agents.retrieval_agent import format_chunks_for_prompt, get_citati
 from services.agents.base_agent import BaseAgent
 from services.agents.retrieval_agent import RetrievalAgent
 from services.patient_stage_service import get_stage_guidelines
-from models.schemas import (
+from models.schemas_pipeline import (
     PipelineContext,
     ReasoningResult,
     Citation

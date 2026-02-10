@@ -14,7 +14,7 @@ logger = logging.getLogger("services.agents.stage_agent_v2")
 logger.setLevel(logging.INFO)
 
 from services.agents.stage_agent_v2 import StageAgentV2
-from models.schemas import PipelineContext, IntentResult
+from models.schemas_pipeline import PipelineContext, IntentResult
 
 async def main():
     agent = StageAgentV2()

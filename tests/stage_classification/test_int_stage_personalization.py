@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 from services.agents.reasoning_agent import ReasoningAgent
-from models.schemas import PipelineContext, ReasoningResult
+from models.schemas_pipeline import PipelineContext, ReasoningResult
 from config.pipeline_config import PatientStage, IntentCategory
 from config.agent_routing import ReasoningAgentType
 from services.patient_stage_service import get_patient_stage_service

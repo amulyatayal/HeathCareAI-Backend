@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Header, Request as FastAPIRequest, Query
 from fastapi.responses import JSONResponse
 
-from models.schemas import (
+from models.schemas_pipeline import (
     PipelineRequest,
     PipelineResponse,
     PipelineContext,

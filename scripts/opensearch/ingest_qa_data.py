@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from services.knowledge_base import get_knowledge_base, create_index_if_not_exists, KnowledgeBaseService
-from models.schemas_deprecated import KnowledgeDocument, QueryCategory, ContentType
+from models.schemas_rag import KnowledgeDocument, QueryCategory, ContentType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from services.agents.base_agent import BaseAgent
 from services.patient_stage_service import PatientStageService
-from models.schemas import PipelineContext, StageResult, AgentTrace
+from models.schemas_pipeline import PipelineContext, StageResult, AgentTrace
 from config.pipeline_config import ModelType
 
 logger = logging.getLogger(__name__)

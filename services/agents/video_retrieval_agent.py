@@ -14,7 +14,7 @@ import asyncio
 from typing import Optional, Dict, Any, List, Set
 
 from services.agents.base_agent import BaseAgent
-from models.schemas import (
+from models.schemas_pipeline import (
     PipelineContext,
     VideoRetrievalResult,
     VideoRetrievalChunk

@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from services.agents.base_agent import BaseAgent, AgentError
-from models.schemas import PipelineContext, IntentResult
+from models.schemas_pipeline import PipelineContext, IntentResult
 from config.pipeline_config import (
     IntentCategory,
     ModelType,

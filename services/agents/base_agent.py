@@ -12,7 +12,7 @@ import logging
 import asyncio
 from datetime import datetime
 
-from models.schemas import (
+from models.schemas_pipeline import (
     PipelineContext,
     AgentTrace,
     AgentStatus
