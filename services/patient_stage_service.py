@@ -440,7 +440,88 @@ class PatientStageService:
             "9": PatientStage.PALLIATIVE_SUPPORT
         }
         
+        return mapping.get(root_id, PatientStage.UNKNOWN)
 
+    # ===== Merged from stage_service_v2_1.py =====
+
+    def check_for_safety_triggers(self, user_message: str, country_code: str = "GB") -> Dict[str, Any]:
+        """
+        Check user message for safety triggers with geo-aware emergency numbers.
+
+        Returns:
+            {
+                "has_triggers": bool,
+                "matched_keywords": List[str],
+                "emergency_number": str,
+                "urgent_number": str
+            }
+        """
+        self._ensure_loaded()
+
+        # Collect safety keywords from all stages
+        safety_keywords = set()
+        for stage in self._stages.values():
+            safety_keywords.update(stage.safety_triggers)
+
+        # Check message
+        message_lower = user_message.lower()
+        matched = [k for k in safety_keywords if k in message_lower]
+
+        # Geo-aware emergency numbers
+        emergency_numbers = {
+            "GB": {"emergency": "999", "urgent": "111"},
+            "US": {"emergency": "911", "urgent": "811"},
+        }
+        numbers = emergency_numbers.get(country_code, {"emergency": "911", "urgent": "811"})
+
+        return {
+            "has_triggers": len(matched) > 0,
+            "matched_keywords": matched,
+            "emergency_number": numbers["emergency"],
+            "urgent_number": numbers.get("urgent"),
+        }
+
+    def detect_regression(self, from_stage_id: Optional[str], to_stage_id: str) -> Dict[str, Any]:
+        """
+        Detect if stage transition represents regression/recurrence.
+
+        Logic:
+            - Type 1 (Recurrence): Survivorship (Group 5) → Treatment (6, 7, 8, 9)
+            - Type 2 (New Primary): Post-treatment (7-10) → Early stages (0-1)
+
+        Returns:
+            {
+                "is_regression": bool,
+                "regression_type": "recurrence" | "new_primary" | None,
+                "message": str (empathy message)
+            }
+        """
+        if not from_stage_id:
+            return {"is_regression": False, "regression_type": None, "message": ""}
+
+        try:
+            from_group = int(from_stage_id.split('.')[0])
+            to_group = int(to_stage_id.split('.')[0])
+        except (ValueError, IndexError):
+            return {"is_regression": False, "regression_type": None, "message": ""}
+
+        # Type 1: Recurrence (Survivorship → Treatment)
+        if from_group == 5 and to_group in [6, 7, 8, 9]:
+            return {
+                "is_regression": True,
+                "regression_type": "recurrence",
+                "message": "I'm sorry to hear about your recurrence. This must be incredibly difficult.",
+            }
+
+        # Type 2: New Primary (Post-treatment → Early stages)
+        if from_group in [7, 8, 9, 10] and to_group in [0, 1]:
+            return {
+                "is_regression": True,
+                "regression_type": "new_primary",
+                "message": "I see this is a new diagnosis. I'm here to support you.",
+            }
+
+        return {"is_regression": False, "regression_type": None, "message": ""}
 # ================================
 # Stage-Aware Response Modifiers
 # ================================

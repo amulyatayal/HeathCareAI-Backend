@@ -74,7 +74,6 @@ async def _handle_v2_1_verification(
     import re
     from services.patient_stage_service import get_patient_stage_service
     from services.patient_profile_service import get_patient_profile_service
-    from services.profile_service_v2_1 import update_stage_with_metadata
     
     # PHASE 1: Check if user is responding to previous verification
     if hasattr(response, 'metadata') and response.metadata:
@@ -125,9 +124,8 @@ async def _handle_v2_1_verification(
                         }
                         broad_stage = stage_map.get(root_id, PatientStage.ACTIVE_TREATMENT)
                         
-                        # Update profile with existing V2.1 method
-                        await update_stage_with_metadata(
-                            profile_service=profile_service,
+                        # Update profile with merged method on profile_service
+                        await profile_service.update_stage_with_metadata(
                             user_id=user_id,
                             new_stage=broad_stage,
                             new_detailed_stage_id=pending_verification,

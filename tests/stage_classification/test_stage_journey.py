@@ -8,7 +8,6 @@ from datetime import datetime, date
 from models.patient_stages import TreatmentStage
 from models.patient_profile import PatientProfile, PatientStageHistory
 from services.patient_stage_service import PatientStageService
-from services.stage_service_v2_1 import check_for_safety_triggers, detect_regression
 
 
 class TestV2_1_Models:
@@ -118,8 +117,7 @@ class TestV2_1_SafetyDetection:
         """Test safety trigger detection with matching keywords."""
         service = PatientStageService()
         
-        result = check_for_safety_triggers(
-            service,
+        result = service.check_for_safety_triggers(
             "I have a high fever and severe bleeding",
             country_code="GB"
         )
@@ -133,8 +131,7 @@ class TestV2_1_SafetyDetection:
         """Test no false positives."""
         service = PatientStageService()
         
-        result = check_for_safety_triggers(
-            service,
+        result = service.check_for_safety_triggers(
             "I have a question about recovery",
             country_code="GB"
         )
@@ -146,8 +143,7 @@ class TestV2_1_SafetyDetection:
         """Test US emergency numbers."""
         service = PatientStageService()
         
-        result = check_for_safety_triggers(
-            service,
+        result = service.check_for_safety_triggers(
             "I have a fever",
             country_code="US"
         )
@@ -159,8 +155,7 @@ class TestV2_1_SafetyDetection:
         """Test UK emergency numbers (default)."""
         service = PatientStageService()
         
-        result = check_for_safety_triggers(
-            service,
+        result = service.check_for_safety_triggers(
             "I have a fever",
             country_code="GB"
         )
@@ -176,7 +171,7 @@ class TestV2_1_RegressionDetection:
         """Test Type 1: Survivorship → Treatment = Recurrence."""
         service = PatientStageService()
         
-        result = detect_regression(service, from_stage_id="5.1", to_stage_id="8.1")
+        result = service.detect_regression(from_stage_id="5.1", to_stage_id="8.1")
         
         assert result["is_regression"] is True
         assert result["regression_type"] == "recurrence"
@@ -186,7 +181,7 @@ class TestV2_1_RegressionDetection:
         """Test Type 2: Post-treatment → Early stage = New Primary."""
         service = PatientStageService()
         
-        result = detect_regression(service, from_stage_id="9.1", to_stage_id="1.1")
+        result = service.detect_regression(from_stage_id="9.1", to_stage_id="1.1")
         
         assert result["is_regression"] is True
         assert result["regression_type"] == "new_primary"
@@ -196,7 +191,7 @@ class TestV2_1_RegressionDetection:
         """Test normal progression (not regression)."""
         service = PatientStageService()
         
-        result = detect_regression(service, from_stage_id="2.1", to_stage_id="8.1")
+        result = service.detect_regression(from_stage_id="2.1", to_stage_id="8.1")
         
         assert result["is_regression"] is False
         assert result["regression_type"] is None
@@ -205,7 +200,7 @@ class TestV2_1_RegressionDetection:
         """Test with no previous stage."""
         service = PatientStageService()
         
-        result = detect_regression(service, from_stage_id=None, to_stage_id="1.1")
+        result = service.detect_regression(from_stage_id=None, to_stage_id="1.1")
         
         assert result["is_regression"] is False
         assert result["regression_type"] is None
@@ -227,7 +222,7 @@ class TestV2_1_IntegrationScenarios:
         
         # Simulate recurrence (5.1 → 8.1)
         service = PatientStageService()
-        regression_result = detect_regression(service, "5.1", "8.1")
+        regression_result = service.detect_regression("5.1", "8.1")
         
         # Update profile
         assert regression_result["is_regression"] is True
@@ -247,8 +242,7 @@ class TestV2_1_IntegrationScenarios:
         )
         
         service = PatientStageService()
-        result = check_for_safety_triggers(
-            service,
+        result = service.check_for_safety_triggers(
             "I have severe chest pain",
             country_code=uk_profile.country_code
         )

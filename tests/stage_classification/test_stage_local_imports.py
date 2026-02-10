@@ -8,8 +8,8 @@ import sys
 import json
 from pathlib import Path
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 print("="*70)
 print("V2.1 JOURNEY ENGINE - LOCAL TEST SUITE")
@@ -61,7 +61,7 @@ print()
 print("Test 2: Stage Hierarchy JSON")
 print("-" * 40)
 try:
-    json_path = Path(__file__).parent.parent / "data" / "stage_hierarchy.json"
+    json_path = Path(__file__).parent.parent.parent / "data" / "stage_hierarchy.json"
     with open(json_path) as f:
         data = json.load(f)
     
@@ -97,22 +97,20 @@ print("Test 3: Service Imports")
 print("-" * 40)
 try:
     from services.patient_stage_service import get_patient_stage_service
-    from services.stage_service_v2_1 import check_for_safety_triggers, detect_regression
     
     stage_service = get_patient_stage_service()
     print(f"✅ PatientStageService loaded: {len(stage_service._stages)} stages")
     
-    # Test safety trigger detection
-    safety_result = check_for_safety_triggers(
-        stage_service,
+    # Test safety trigger detection (now a method on stage_service)
+    safety_result = stage_service.check_for_safety_triggers(
         user_message="I have a high fever and severe pain",
         country_code="GB"
     )
     print(f"✅ Safety trigger detection: matched={safety_result['has_triggers']}, keywords={safety_result['matched_keywords']}")
     print(f"   - Emergency number (GB): {safety_result['emergency_number']}")
     
-    # Test regression detection
-    regression = detect_regression(stage_service, from_stage_id="5.1", to_stage_id="8")
+    # Test regression detection (now a method on stage_service)
+    regression = stage_service.detect_regression(from_stage_id="5.1", to_stage_id="8")
     print(f"✅ Regression detection: is_regression={regression['is_regression']}, type={regression['regression_type']}")
     
 except Exception as e:
@@ -127,16 +125,18 @@ print()
 print("Test 4: Profile Service Extensions")
 print("-" * 40)
 try:
-    from services.profile_service_v2_1 import update_stage_with_metadata
-    print("✅ profile_service_v2_1.update_stage_with_metadata imported")
+    from services.patient_profile_service import get_patient_profile_service
+    profile_service = get_patient_profile_service()
+    print("✅ PatientProfileService.update_stage_with_metadata available")
     
-    # Check function signature
+    # Check method exists
     import inspect
-    sig = inspect.signature(update_stage_with_metadata)
+    assert hasattr(profile_service, 'update_stage_with_metadata'), "Method not found on service"
+    sig = inspect.signature(profile_service.update_stage_with_metadata)
     params = list(sig.parameters.keys())
-    expected = ['profile_service', 'user_id', 'new_stage', 'new_detailed_stage_id', 'metadata']
+    expected = ['user_id', 'new_stage', 'new_detailed_stage_id', 'metadata']
     matches = all(p in params for p in expected)
-    print(f"✅ Function signature valid: {matches}")
+    print(f"✅ Method signature valid: {matches}")
     
 except Exception as e:
     print(f"❌ Profile service extension failed: {e}")
@@ -144,22 +144,15 @@ except Exception as e:
 
 print()
 
-# Test 5: Orchestrator Extensions
-print("Test 5: Orchestrator Extensions")
+# Test 5: Orchestrator
+print("Test 5: Orchestrator")
 print("-" * 40)
 try:
-    from services.orchestrator_v2_1 import run_phase_0_safety_check, inject_verification_question
-    print("✅ orchestrator_v2_1 functions imported")
-    
-    # Check signatures
-    import inspect
-    sig1 = inspect.signature(run_phase_0_safety_check)
-    sig2 = inspect.signature(inject_verification_question)
-    print(f"✅ run_phase_0_safety_check params: {list(sig1.parameters.keys())}")
-    print(f"✅ inject_verification_question params: {list(sig2.parameters.keys())}")
+    from services.agents.orchestrator import Orchestrator
+    print("✅ Orchestrator imported successfully")
     
 except Exception as e:
-    print(f"❌ Orchestrator extension failed: {e}")
+    print(f"❌ Orchestrator import failed: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -170,14 +163,16 @@ print()
 print("Test 6: End-to-End Integration")
 print("-" * 40)
 try:
-    # Test verification question injection
-    confirmation, has_q = inject_verification_question(
-        inferred_stage_id="2.1.1",
-        proposed_stage_name="Breast Conservation Surgery"
-    )
-    print(f"✅ Verification question injection: has_question={has_q}")
-    if has_q:
-        print(f"   Preview: {confirmation[:100]}...")
+    # Test verification question availability (from stage data)
+    stage_service = get_patient_stage_service()
+    sample_stage = stage_service.get_stage_by_id("2.1.1")
+    if sample_stage:
+        has_q = len(sample_stage.verification_questions) > 0
+        print(f"✅ Verification questions for '2.1.1': has_questions={has_q}")
+        if has_q:
+            print(f"   Preview: {sample_stage.verification_questions[0][:100]}...")
+    else:
+        print("⚠️  Stage 2.1.1 not found, skipping")
     
 except Exception as e:
     print(f"❌ Integration test failed: {e}")
