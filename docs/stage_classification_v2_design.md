@@ -1,8 +1,8 @@
 # Stage Classification & Orchestration Architecture (V2)
 
 **Version**: 2.1  
-**Date**: 2026-02-01  
-**Status**: Implemented (V2.0) + Journey Enhancements Planned (V2.1)  
+**Date**: 2026-02-01 (Design) | 2026-02-09 (Implemented)  
+**Status**: ✅ V2.0 Implemented + V2.1 Implemented & Verified  
 
 ## 1. Overview
 This document details the refactored architecture for identifying and confirming a patient's treatment stage in the app 
@@ -370,7 +370,33 @@ Bot: "I'm sorry to hear about your recurrence. I know this must be
 - Rule-based safety checks (keyword matching)
 - Safe abstention via verification questions
 
-### 12.8 References
+### 12.8 V2.1 Implementation Status (2026-02-09)
+
+✅ **Completed & Verified**
+
+#### Key Changes from Original Design
+
+1. **Monkey-Patch → API Route**: The original design used `activate_v2_1_features()` to monkey-patch `PipelineOrchestrator.process`. This caused a `Content-Length RuntimeError` because response modification happened after FastAPI serialization. **Fix**: Moved V2.1 logic to `api/routes.py` (`_handle_v2_1_verification`). The monkey-patch in `main.py` is disabled.
+
+2. **Granular Stage Name in Prompts**: The confirmation prompt "It sounds like you might be in the **Active Treatment** stage" was incorrect — it used the broad `PatientStage` enum display name. **Fix**: `orchestrator.py` now uses `get_patient_stage_service().get_stage_by_id(granular_id).name` to show specific names (e.g., "Wide local excision", "Chemotherapy").
+
+3. **RAG Context Cleanup**: Removed technical stage IDs (e.g., "2.1.1.1") from the LLM's RAG context in `patient_stage_service.py`. Added treatment phase (root node name) instead for better personalization.
+
+#### Bugs Resolved
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| Always shows "Active Treatment" | `stage_display_names.get(inferred.stage)` maps broad enum | Lookup granular name from `stage_hierarchy.json` |
+| Content-Length RuntimeError | Monkey-patch modified response after serialization | Move logic to API route level |
+| Literal `\n` in questions | Double-escaped `"\\n"` | Corrected to `"\n"` |
+| Stage IDs in LLM context | `get_rag_context()` included `stage.stage_id` | Removed ID, added treatment phase name |
+
+#### Eval Results
+
+V2.1 granular flows verified with `tests/eval_v2_1_flows.py` (13 test cases).
+Quick run (5 cases): **80% V2.1 activation rate** — 4/5 responses returned granular sub-stage IDs.
+
+### 12.9 References
 
 **Authoritative Documents**:
 - 📘 [MASTER_IMPLEMENTATION_GUIDE.md](../../brain/1b6f90f7-8562-4d42-8a70-f1687c2c1e32/MASTER_IMPLEMENTATION_GUIDE.md) - Complete V2.1 guide with decisions, UX examples, and implementation steps
@@ -389,3 +415,4 @@ Bot: "I'm sorry to hear about your recurrence. I know this must be
 - **Granular Sub-Stage Detection**: Improve `StageAgentV2` prompt to distinguish between very similar sub-stages (e.g., "Lumpectomy" vs "Mastectomy") with higher precision using detailed definitions.
 - **Confidence Calibration**: Track confirmation accuracy to fine-tune certainty thresholds.
 - **ML-based Safety Detection**: Upgrade from keyword matching to NLP-based context understanding for safety triggers.
+- **Analytics Infrastructure**: `StageMismatch` DynamoDB table, mismatch logging, weekly analysis cron jobs, quality dashboards.

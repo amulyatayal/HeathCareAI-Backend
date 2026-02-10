@@ -1,8 +1,8 @@
 # Stages Journey Architecture - Design Notes (V2.1 Final)
 
 **Version**: 2.1 Final  
-**Date**: 2026-02-01  
-**Status**: ✅ Ready for Implementation  
+**Date**: 2026-02-01 (Design) | 2026-02-09 (Implemented)  
+**Status**: ✅ Implemented & Verified  
 
 ## Overview
 
@@ -1335,6 +1335,76 @@ When making changes to the stages journey system:
 
 ---
 
+## V2.1 Implementation Changelog (2026-02-09)
+
+This section documents the actual changes made during V2.1 implementation, including bugs discovered and fixes applied.
+
+### Files Modified
+
+| File | Change Summary |
+|------|----------------|
+| `services/agents/orchestrator.py` | Granular stage name lookup via hierarchy (was showing generic "Active Treatment") |
+| `api/routes.py` | V2.1 verification question injection moved here from monkey-patch |
+| `services/orchestrator_integration.py` | Multi-question display, loop prevention, confirmation/rejection detection |
+| `services/patient_stage_service.py` | Cleaned RAG context — removed stage IDs, added treatment phase for LLM |
+| `models/patient_profile.py` | Added `detailed_stage_label` field |
+| `main.py` | Disabled monkey-patch wrapper (logic moved to API route) |
+| `.gitignore` | Added `.agent/workflows/` (local configs) |
+| `tests/eval_v2_1_flows.py` | LLM prompt eval with 13 test cases |
+
+### Bugs Found & Fixed
+
+#### Bug 1: "Active Treatment" shown for all treatment stages
+- **Symptom**: Confirmation prompt always said "It sounds like you might be in the **Active Treatment** stage"
+- **Root Cause**: `orchestrator.py` line 322 used `stage_display_names.get(inferred.stage)` which mapped the broad `PatientStage` enum to a generic display name. Since surgery, chemo, radiotherapy, and hormone therapy all map to the `ACTIVE_TREATMENT` enum, every treatment patient saw "Active Treatment".
+- **Fix**: Replaced with `get_patient_stage_service().get_stage_by_id(granular_id).name` to look up the specific name from `stage_hierarchy.json` (e.g., "Wide local excision", "Chemotherapy"). Fallback to broad name if lookup fails.
+- **Files**: `services/agents/orchestrator.py` (2 locations: confirmation prompt + update message)
+
+#### Bug 2: Content-Length RuntimeError
+- **Symptom**: `RuntimeError: Response content longer than Content-Length` when V2.1 wrapper modified response
+- **Root Cause**: The monkey-patch wrapper (`orchestrator_integration.py`) modified `result.response` in-place after FastAPI had already calculated the `Content-Length` header.
+- **Fix**: Moved V2.1 verification logic to the API route level (`api/routes.py` `_handle_v2_1_verification`) where the response hasn't been serialized yet. Disabled the monkey-patch in `main.py`.
+- **Files**: `api/routes.py`, `main.py`, `services/orchestrator_integration.py`
+
+#### Bug 3: Newline escaping in verification questions
+- **Symptom**: Verification questions showed literal `\n` instead of line breaks
+- **Root Cause**: String used `"\\n"` (escaped backslash) instead of `"\n"` (actual newline)
+- **Fix**: Corrected escaping in `orchestrator_integration.py`
+
+#### Bug 4: Technical noise in RAG context
+- **Symptom**: LLM received stage IDs like "2.1.1.1" in its context, which added no value
+- **Root Cause**: `get_rag_context()` in `patient_stage_service.py` included `stage.stage_id` in the prompt
+- **Fix**: Removed stage ID from LLM context, added treatment phase (root node name) instead for better personalization
+- **Files**: `services/patient_stage_service.py`
+
+### Eval Results (Quick Run - 5/13 Cases)
+
+| Test | Broad Stage | Granular ID | Result |
+|------|-------------|-------------|--------|
+| Lumpectomy | active_treatment | `2.1.1.1` | ✅ PASS |
+| Mastectomy | active_treatment | — | ❌ FAIL (clarification) |
+| Reconstruction | active_treatment | `2.1.2.2` | ✅ PASS |
+| Chemo: General | active_treatment | `3.1` | ✅ PASS |
+| Chemo: Side effects | active_treatment | `3.1` | ✅ PASS |
+
+**V2.1 activation rate**: 80% (4/5 have granular stage IDs with sub-stage depth)
+
+### Architecture Decision: API Route vs Monkey-Patch
+
+The original V2.1 design used `activate_v2_1_features()` to monkey-patch `PipelineOrchestrator.process`. This was replaced with direct logic in `api/routes.py` (`_handle_v2_1_verification`) because:
+1. Monkey-patching modified the response after serialization → Content-Length error
+2. API-level logic is more maintainable and testable
+3. The orchestrator remains clean and focused on pipeline execution
+
+### Server Configuration
+
+| Server | Port | Notes |
+|--------|------|-------|
+| Backend (uvicorn) | `localhost:8000` | FastAPI, auto-reload in dev |
+| Frontend (Vite) | `localhost:3000` | Proxies `/api` → `localhost:8000` |
+
+---
+
 ## Authoritative Document References
 
 **V2.1 Implementation**:
@@ -1345,4 +1415,3 @@ When making changes to the stages journey system:
 **V2 Architecture**:
 - 🏗️ [stage_classification_v2_design.md](stage_classification_v2_design.md) - V2 architecture + V2.1 enhancements
 - 🔄 [V1 Design](stage_classification_design.md) - **DEPRECATED** (V1 architecture, replaced by V2)
-
