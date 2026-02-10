@@ -41,6 +41,23 @@ SITUATION_TO_STAGE = {
 }
 
 
+# Mapping from hierarchical stage IDs → broad PatientStage enum
+# Used when onboarding sends a detailed_stage_id (root stage selection)
+STAGE_ID_TO_PATIENT_STAGE = {
+    "0":  PatientStage.PRE_DIAGNOSIS,       # Pre-diagnosis
+    "1":  PatientStage.NEWLY_DIAGNOSED,      # Results Clinic (just diagnosed)
+    "2":  PatientStage.ACTIVE_TREATMENT,     # Surgery
+    "3":  PatientStage.ACTIVE_TREATMENT,     # Neoadjuvant Chemotherapy
+    "4":  PatientStage.ACTIVE_TREATMENT,     # Neoadjuvant endocrine treatment
+    "5":  PatientStage.SURVEILLANCE,         # Survivorship
+    "6":  PatientStage.ACTIVE_TREATMENT,     # Further surgery
+    "7":  PatientStage.ACTIVE_TREATMENT,     # Adjuvant radiotherapy
+    "8":  PatientStage.ACTIVE_TREATMENT,     # Adjuvant chemotherapy
+    "9":  PatientStage.POST_TREATMENT,       # Adjuvant endocrine therapy
+    "10": PatientStage.POST_TREATMENT,       # Adjuvant Zoledronic acid
+}
+
+
 # ================================
 # Explicit Data (User-Provided)
 # ================================
@@ -294,20 +311,20 @@ class PatientProfile(BaseModel):
     def to_dynamodb_item(self) -> dict:
         """Convert to DynamoDB-compatible dict."""
         data = self.dict()
-        # Convert datetime objects to ISO strings
-        for key in ['created_at', 'updated_at', 'stage_updated_at', 'onboarding_completed_at', 'detailed_stage_updated_at']:
-            if data.get(key):
-                data[key] = data[key].isoformat() if isinstance(data[key], datetime) else data[key]
-        # Convert nested datetimes in stage_history
-        for entry in data.get('stage_history', []):
-            if entry.get('timestamp'):
-                entry['timestamp'] = entry['timestamp'].isoformat() if isinstance(entry['timestamp'], datetime) else entry['timestamp']
-        # Convert dates in explicit_data
-        if data.get('explicit_data'):
-            for key in ['diagnosis_date', 'treatment_start_date', 'treatment_end_date']:
-                if data['explicit_data'].get(key):
-                    val = data['explicit_data'][key]
-                    data['explicit_data'][key] = val.isoformat() if isinstance(val, date) else val
+        
+        def _convert_datetimes(obj):
+            """Recursively convert datetime/date objects to ISO strings."""
+            if isinstance(obj, dict):
+                return {k: _convert_datetimes(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [_convert_datetimes(item) for item in obj]
+            elif isinstance(obj, datetime):
+                return obj.isoformat()
+            elif isinstance(obj, date):
+                return obj.isoformat()
+            return obj
+        
+        data = _convert_datetimes(data)
         return data
     
     @classmethod

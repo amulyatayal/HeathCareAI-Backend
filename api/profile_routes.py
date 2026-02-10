@@ -18,6 +18,7 @@ from models.patient_profile import (
     StageUpdateRequest,
     LinkAccountRequest,
     ProfileResponse,
+    STAGE_ID_TO_PATIENT_STAGE,
     OnboardingStatusResponse,
 )
 from models.patient_stages import (
@@ -334,15 +335,17 @@ async def select_treatment_stage(
     user_id: str = Depends(get_user_id_allowing_guest)
 ):
     """
-    Select a treatment stage for personalized responses.
+    Select a root treatment stage from the UI.
     
-    Updates the user's profile with the selected stage.
-    Stage will be used to personalize AI responses.
+    UI only selects broad/root stages (e.g. 'Surgery', 'Chemotherapy').
+    This updates current_stage and clears detailed_stage_id/label,
+    since the user hasn't specified a sub-stage. The LLM will infer
+    the detailed sub-stage during chat if needed.
     """
-    logger.info(f"User {user_id} selecting stage: {data.stage_id}")
+    logger.info(f"User {user_id} selecting root stage from UI: {data.stage_id}")
     
     try:
-        # Validate stage exists
+        # Validate stage exists in hierarchy
         stage_service = get_patient_stage_service()
         stage = stage_service.get_stage_by_id(data.stage_id)
         
@@ -352,19 +355,24 @@ async def select_treatment_stage(
                 detail=f"Invalid stage ID: {data.stage_id}"
             )
         
-        # Update user profile with selected stage
+        # Derive the broad PatientStage from root stage ID
+        root_id = data.stage_id.split('.')[0]
+        broad_stage = STAGE_ID_TO_PATIENT_STAGE.get(root_id)
+        if not broad_stage:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stage ID {data.stage_id} has no broad stage mapping"
+            )
+        
+        # Update user profile: sets current_stage, clears detailed_stage_id/label
         profile_service = get_patient_profile_service()
-        
-        # Get or create profile (handles both OAuth and guest users)
-        profile = await profile_service.get_or_create_profile(user_id)
-        
-        # Update the detailed stage using existing service method
-        await profile_service.update_stage_detailed(user_id, data.stage_id)
+        await profile_service.get_or_create_profile(user_id)
+        await profile_service.update_stage(user_id, broad_stage)
         
         # Get breadcrumb for response
         breadcrumb = stage_service.get_breadcrumb(data.stage_id)
         
-        logger.info(f"Successfully updated stage for {user_id} to {stage.name} ({data.stage_id})")
+        logger.info(f"Updated broad stage for {user_id} to {broad_stage.value} (from root {data.stage_id})")
         
         return {
             "message": f"Stage updated to {stage.name}",

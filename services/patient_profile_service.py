@@ -22,6 +22,7 @@ from models.patient_profile import (
     PatientStageHistory,
     OnboardingRequest,
     SITUATION_TO_STAGE,
+    STAGE_ID_TO_PATIENT_STAGE,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,11 +134,14 @@ class PatientProfileService:
         
         now = datetime.utcnow()
         
-        # Map situation to stage
-        new_stage = SITUATION_TO_STAGE.get(
-            data.current_situation, 
-            PatientStage.UNKNOWN
-        )
+        # Derive broad stage: prefer detailed_stage_id mapping, fall back to situation mapping
+        if data.detailed_stage_id and data.detailed_stage_id in STAGE_ID_TO_PATIENT_STAGE:
+            new_stage = STAGE_ID_TO_PATIENT_STAGE[data.detailed_stage_id]
+        else:
+            new_stage = SITUATION_TO_STAGE.get(
+                data.current_situation, 
+                PatientStage.UNKNOWN
+            )
         
         # Parse dates if provided
         diagnosis_date = None
@@ -175,10 +179,11 @@ class PatientProfileService:
             timestamp=now,
             from_stage=old_stage if old_stage != PatientStage.UNKNOWN else None,
             to_stage=new_stage,
-            source="onboarding"
+            source="onboarding",
+            to_detailed_stage_id=data.detailed_stage_id,
         ))
         
-        # Set detailed stage ID if provided (from treatment type mapping)
+        # Set detailed stage ID if provided
         if data.detailed_stage_id:
             profile.detailed_stage_id = data.detailed_stage_id
             profile.detailed_stage_updated_at = now
@@ -230,6 +235,12 @@ class PatientProfileService:
         profile.stage_updated_at = now
         profile.updated_at = now
         
+        # Clear detailed stage — it belongs to the old broad stage
+        # and would be inconsistent if kept
+        profile.detailed_stage_id = None
+        profile.detailed_stage_label = None
+        profile.detailed_stage_updated_at = now
+        
         # Add to history
         profile.stage_history.append(PatientStageHistory(
             timestamp=now,
@@ -259,6 +270,9 @@ class PatientProfileService:
         """
         Update patient's detailed treatment stage from hierarchical pathway.
         
+        Also derives and updates the broad current_stage using
+        STAGE_ID_TO_PATIENT_STAGE mapping.
+        
         Args:
             user_id: Firebase UID from JWT token
             detailed_stage_id: Stage ID from treatment pathway (e.g., '2.1.1')
@@ -275,6 +289,10 @@ class PatientProfileService:
             raise ValueError(f"Profile not found for user {user_id}")
         
         now = datetime.utcnow()
+        old_stage = profile.current_stage
+        
+        # Derive the root stage ID (top-level, before the first dot)
+        root_id = detailed_stage_id.split('.')[0]
         
         # Update detailed stage
         profile.detailed_stage_id = detailed_stage_id
@@ -285,10 +303,32 @@ class PatientProfileService:
         if detailed_stage_label:
             profile.detailed_stage_label = detailed_stage_label
         
+        # Also update the broad current_stage using the mapping
+        new_stage = STAGE_ID_TO_PATIENT_STAGE.get(root_id)
+        if new_stage:
+            profile.current_stage = new_stage
+            logger.info(
+                f"Derived broad stage for {user_id}: "
+                f"{root_id} -> {new_stage.value}"
+            )
+        
+        # Record stage history
+        history_entry = PatientStageHistory(
+            from_stage=old_stage,
+            to_stage=profile.current_stage,
+            to_detailed_stage_id=detailed_stage_id,
+            source="manual_update",
+            user_confirmed=True
+        )
+        if not profile.stage_history:
+            profile.stage_history = []
+        profile.stage_history.append(history_entry)
+        
         try:
             self.table.put_item(Item=profile.to_dynamodb_item())
             logger.info(
-                f"Updated detailed stage for user {user_id}: {detailed_stage_id}"
+                f"Updated detailed stage for user {user_id}: "
+                f"{detailed_stage_id} (broad: {profile.current_stage.value})"
             )
             return profile
             
@@ -444,6 +484,7 @@ class PatientProfileService:
         user_id: str,
         new_stage: PatientStage,
         new_detailed_stage_id: Optional[str] = None,
+        new_detailed_stage_label: Optional[str] = None,
         metadata: Optional[Dict] = None
     ) -> 'PatientProfile':
         """
@@ -489,6 +530,13 @@ class PatientProfileService:
 
         if new_detailed_stage_id:
             profile.detailed_stage_id = new_detailed_stage_id
+            profile.detailed_stage_label = new_detailed_stage_label
+            profile.detailed_stage_updated_at = now
+        else:
+            # Clear stale detailed stage when broad stage changes
+            # without a new detailed ID
+            profile.detailed_stage_id = None
+            profile.detailed_stage_label = None
             profile.detailed_stage_updated_at = now
 
         # Update stage certainty
