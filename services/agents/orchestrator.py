@@ -208,9 +208,12 @@ class PipelineOrchestrator:
             
             # ============================================
             # PHASE 1.5: Pathway Proposals (Chat-Based)
+            # Answer-first flow: don't stop pipeline for proposals.
+            # Instead, continue to generate an answer and append a soft confirm.
             # ============================================
             modification_proposal = None
             stage_update_message = None
+            pending_stage_proposal = None  # Name to append as soft confirm
             
             if user_id and not is_guest and profile:
                 inferred = ctx.stage_result
@@ -236,44 +239,40 @@ class PipelineOrchestrator:
                     last_was_proposal = False
                     if conversation_history:
                         last_msg = conversation_history[-1]
-                        if last_msg.get("role") == "assistant" and "Is that correct?" in last_msg.get("content", ""):
+                        if last_msg.get("role") == "assistant" and "Should I update your records?" in last_msg.get("content", ""):
                             last_was_proposal = True
                     
                     # 2. Logic
                     if last_was_proposal:
                         # We asked -> User responded.
                         # Check if response is positive confirmation
-                        # Allow "yes" at the beginning of longer messages like "yes, I am asking about..."
                         clean_msg = message.strip().lower()
                         confirmation_words = ['yes', 'yeah', 'yep', 'correct', 'that\'s right', 'sure', 'right']
                         is_confirmation = any(clean_msg.startswith(word) for word in confirmation_words)
                         
                         if is_confirmation:
-                            # EXECUTE UPDATE
-                            logger.info(f"User confirmed stage change to {inferred.stage}. Updating profile.")
+                            # EXECUTE UPDATE — confirm BROAD stage only (no drilling)
+                            logger.info(f"User confirmed stage change to {inferred.stage}. Updating profile (broad only).")
                             profile_service = get_patient_profile_service()
                             
-                            # Use granular ID if available, else broad
-                            target_id = inferred_stage_id if inferred_stage_id else "0" # Fallback? 
-                            # If inferred.stage is broad enum, we can't map back easily without granular ID.
-                            # StageAgentV2 metadata has granular_id.
-                            
                             if inferred_stage_id:
-                                # Look up granular stage name from hierarchy
+                                # Use ROOT stage ID only (broad stage, no child drilling)
+                                root_stage_id = inferred_stage_id.split(".")[0]
+                                
+                                # Look up stage name from hierarchy
                                 stage_service = get_patient_stage_service()
-                                stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
-                                # Use patient-facing label with clinical name in brackets when different
+                                stage_obj = stage_service.get_stage_by_id(root_stage_id)
                                 if stage_obj:
                                     label = getattr(stage_obj, 'patient_facing_label', None) or stage_obj.name
                                     friendly_name = f"{label} ({stage_obj.name})" if label != stage_obj.name else stage_obj.name
                                 else:
                                     friendly_name = str(inferred.stage)
                                 
-                                # Update stage atomically: broad + detailed + label in one call
+                                # Update with ROOT stage ID — sub-stage will be asked later
                                 await profile_service.update_stage_with_metadata(
                                     user_id,
                                     new_stage=inferred.stage,
-                                    new_detailed_stage_id=inferred_stage_id,
+                                    new_detailed_stage_id=root_stage_id,
                                     new_detailed_stage_label=friendly_name if stage_obj else None,
                                     metadata={
                                         'source': 'llm_inference',
@@ -283,19 +282,16 @@ class PipelineOrchestrator:
                                     }
                                 )
                                 
-                                stage_update_message = f"Thanks, I've updated your stage to **{friendly_name}**."
+                                stage_update_message = f"Got it, I've updated your stage to **{friendly_name}** ✅"
                                 logger.info(f"Setting stage_update_message: {stage_update_message}")
                                 
-                                # To preserve context, use the PREVIOUS user message for RAG
-                                # Extract the last user message from conversation history (before "yes")
+                                # Use the PREVIOUS user message for RAG context (not "yes")
                                 if conversation_history and len(conversation_history) >= 2:
-                                    # Find the last user message before the current one
                                     for i in range(len(conversation_history) - 1, -1, -1):
                                         if conversation_history[i].get("role") == "user":
                                             original_question = conversation_history[i].get("content", "")
                                             if original_question and original_question.strip().lower() not in confirmation_words:
                                                 logger.info(f"Using original question for context: {original_question}")
-                                                # Update the context to use the original question
                                                 ctx = PipelineContext(
                                                     request_id=ctx.request_id,
                                                     user_message=original_question,
@@ -304,14 +300,19 @@ class PipelineOrchestrator:
                                                     user_id=ctx.user_id,
                                                     metadata=ctx.metadata
                                                 )
-                                                # Re-run classification with the original question
+                                                # Re-run classification ONLY for intent (not for stage drilling)
                                                 ctx = await self._run_classification_phase(ctx)
+                                                # Override stage back to the confirmed stage (no drilling)
+                                                ctx.stage_result = StageResult(
+                                                    stage=inferred.stage,
+                                                    certainty=CertaintyLevel.HIGH,
+                                                    certainty_score=1.0,
+                                                    signals=["User confirmed stage"]
+                                                )
+                                                ctx.metadata["granular_stage_id"] = root_stage_id
                                                 break
-                                
-                                # Continue processing strictly with NEW stage (which is already in ctx)
                             else:
                                 logger.warning("Granular ID missing for update")
-                                # Skip update if no ID
                         else:
                             # User ignored or negated.
                             # REVERT to Profile Stage to respect user choice.
@@ -320,17 +321,19 @@ class PipelineOrchestrator:
                                 stage=profile.current_stage,
                                 certainty=CertaintyLevel.HIGH,
                                 certainty_score=1.0,
-                                signals=["User ignored proposal"]
+                                signals=["User declined proposal"]
                             )
                             # Do NOT ask again.
                     else:
                         # We haven't asked yet.
-                        # STOP PIPELINE. Ask Confirmation.
-                        # Look up granular stage name from hierarchy for specific, patient-friendly prompt
+                        # DON'T stop pipeline — continue to answer, then append soft confirm.
+                        # Look up proposed name for the soft confirm text
                         proposed_name = None
                         if inferred_stage_id:
+                            # Use ROOT stage name for the proposal (no drilling into children)
+                            root_id = inferred_stage_id.split(".")[0]
                             stage_service = get_patient_stage_service()
-                            stage_obj = stage_service.get_stage_by_id(inferred_stage_id)
+                            stage_obj = stage_service.get_stage_by_id(root_id)
                             if stage_obj:
                                 label = getattr(stage_obj, 'patient_facing_label', None) or stage_obj.name
                                 proposed_name = f"{label} ({stage_obj.name})" if label != stage_obj.name else stage_obj.name
@@ -359,25 +362,9 @@ class PipelineOrchestrator:
                             }
                             proposed_name = stage_display_names.get(inferred.stage, str(inferred.stage))
                         
-                        logger.info(f"Proposing stage change: {profile.current_stage} -> {proposed_name}")
-                        
-                        # Return clarifications-style response
-                        total_latency = int((time.time() - start_time) * 1000)
-                        return PipelineResponse(
-                            request_id=ctx.request_id,
-                            response=f"It sounds like you might be in the **{proposed_name}** stage based on what you said. Is that correct?",
-                            intent=ctx.intent_result.intent,
-                            stage=ctx.stage_result.stage,
-                            citations=[],
-                            confidence=1.0, # High confidence in question
-                            abstained=False, # We are engaging
-                            disclaimer_included=False,
-                            trace=self._traces if include_trace else [],
-                            total_latency_ms=total_latency,
-                            needs_onboarding=needs_onboarding,
-                            sign_in_suggestion=None,
-                            metadata=ctx.metadata
-                        )
+                        logger.info(f"Pending stage proposal (answer-first): {profile.current_stage} -> {proposed_name}")
+                        pending_stage_proposal = proposed_name
+                        # Pipeline continues — proposal will be appended after the answer
             
             # ─── Revert to profile stage for tone if no change was confirmed ───
             # This prevents the Reasoning Agent from using the inferred stage's tone
@@ -424,9 +411,52 @@ class PipelineOrchestrator:
             if stage_update_message:
                 logger.info(f"Prepending stage_update_message to response: {stage_update_message}")
                 response.response = stage_update_message + "\n\n" + response.response
-            else:
-                logger.info("No stage_update_message to prepend")
-                
+            
+            # Append soft confirm for pending stage proposal (answer-first)
+            if pending_stage_proposal:
+                logger.info(f"Appending soft stage confirm to response: {pending_stage_proposal}")
+                response.response += (
+                    f"\n\nIt sounds like your treatment stage may have changed "
+                    f"to **{pending_stage_proposal}**. Should I update your records?"
+                )
+            
+            # Deferred one-shot sub-stage question
+            # Only fires if: broad stage confirmed, sub-stage unknown (root-only ID), 
+            # and we haven't asked yet
+            if (profile and not pending_stage_proposal and not stage_update_message
+                and profile.detailed_stage_id 
+                and "." not in profile.detailed_stage_id 
+                and not getattr(profile, 'sub_stage_asked', False)):
+                try:
+                    stage_service = get_patient_stage_service()
+                    children = stage_service.get_children(profile.detailed_stage_id)
+                    if children:
+                        options = "\n".join(
+                            f"• {getattr(c, 'patient_facing_label', None) or c.name}"
+                            for c in children
+                            if getattr(c, 'is_patient_facing', True)
+                        )
+                        if options:
+                            response.response += (
+                                f"\n\nBy the way, knowing your specific treatment type "
+                                f"helps me give better advice. Was it:\n{options}"
+                                f"\n• Not sure / something else"
+                            )
+                            # Mark as asked — one-shot (direct update, not update_stage_with_metadata
+                            # which would early-return on same stage and reset the flag)
+                            try:
+                                profile_service = get_patient_profile_service()
+                                profile_service.table.update_item(
+                                    Key={'user_id': user_id},
+                                    UpdateExpression='SET sub_stage_asked = :val',
+                                    ExpressionAttributeValues={':val': True}
+                                )
+                            except Exception as save_err:
+                                logger.warning(f"Failed to persist sub_stage_asked: {save_err}")
+                            logger.info("Appended deferred sub-stage question (one-shot)")
+                except Exception as e:
+                    logger.warning(f"Sub-stage question failed (non-critical): {e}")
+            
             return response
             
         except Exception as e:

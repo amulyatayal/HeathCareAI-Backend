@@ -171,7 +171,7 @@ async def _handle_v2_1_verification(
     
     # PHASE 2: Inject verification questions if stage confirmation detected
     if hasattr(response, 'response') and response.response:
-        if "It sounds like you might be in the" in response.response and "Is that correct?" in response.response:
+        if "It sounds like you" in response.response and "Should I update your records?" in response.response:
             try:
                 logger.info("[V2.1] Pattern matched - stage confirmation detected!")
                 

@@ -528,6 +528,9 @@ class PatientProfileService:
         profile.stage_updated_at = now
         profile.updated_at = now
 
+        # Reset sub-stage tracking for new broad stage
+        profile.sub_stage_asked = False
+
         if new_detailed_stage_id:
             profile.detailed_stage_id = new_detailed_stage_id
             profile.detailed_stage_label = new_detailed_stage_label

@@ -285,6 +285,10 @@ class PatientProfile(BaseModel):
         default_factory=list,
         description="Completed treatments: ['surgery', 'chemotherapy']"
     )
+    sub_stage_asked: bool = Field(
+        default=False,
+        description="Whether the one-shot sub-stage question has been asked for the current broad stage"
+    )
     first_diagnosis_date: Optional[date] = Field(
         None,
         description="Date of initial diagnosis"
