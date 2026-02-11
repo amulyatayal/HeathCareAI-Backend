@@ -10,6 +10,20 @@ from config.pipeline_config import ModelType, PATIENT_STAGES
 
 logger = logging.getLogger(__name__)
 
+# Stages that come AFTER initial surgery — used by guard rails
+_POST_SURGERY_STAGES = {
+    "adjuvant_chemo", "adjuvant_radio", "adjuvant_endocrine",
+    "adjuvant_zoledronic", "further_surgery", "survivorship"
+}
+
+# Words that signal cancer recurrence (not just further surgery)
+_RECURRENCE_SIGNALS = [
+    "come back", "came back", "recurrence", "recur", "returned",
+    "new tumour", "new tumor", "new lump", "spread", "metastatic",
+    "secondary", "diagnosed again", "found again"
+]
+
+
 class StageAgentV2(BaseAgent):
     """
     LLM-based Stage Classifier acting as a pure agent.
@@ -115,6 +129,9 @@ class StageAgentV2(BaseAgent):
                 temperature=0.0
             )
             
+            # Apply deterministic guard rails to fix known LLM temporal errors
+            result_data = self._apply_temporal_guard_rails(result_data, current_stage, user_query)
+            
             # Map valid certainty strings for schema validation
             certainty_str = result_data.get("certainty", "low").lower()
             certainty_score = 0.95 if certainty_str == "high" else (0.8 if certainty_str == "medium" else 0.4)
@@ -145,3 +162,50 @@ class StageAgentV2(BaseAgent):
                 signals=[]
             )
             return context
+
+    def _apply_temporal_guard_rails(
+        self, result_data: dict, current_stage: str, user_message: str
+    ) -> dict:
+        """
+        Apply deterministic overrides when the LLM ignores temporal context.
+        
+        These catch known failure patterns where the LLM matches hierarchy
+        descriptions over prompt rules.
+        """
+        inferred_spec = result_data.get("spec_stage", "unknown")
+        granular = str(result_data.get("stage", "unknown"))
+        granular_root = granular.split(".")[0] if granular else None
+        reasoning = result_data.get("reasoning", "")
+
+        # Guard 1: Post-surgery patient inferred as initial surgery → further_surgery
+        # If patient already had surgery (in adjuvant/survivorship), any new surgery
+        # is further surgery (Stage 6), not initial surgery (Stage 2).
+        if current_stage in _POST_SURGERY_STAGES and granular_root == "2":
+            logger.info(
+                f"Guard rail triggered: remapping surgery(2) → further_surgery(6) "
+                f"for post-surgery patient (current={current_stage})"
+            )
+            result_data["spec_stage"] = "further_surgery"
+            result_data["stage"] = "6"
+            result_data["reasoning"] = (
+                reasoning + " [Guard: post-surgery patient → further_surgery]"
+            )
+
+        # Guard 2: Survivorship + further_surgery with recurrence signals → newly_diagnosed
+        # If patient is in survivorship and mentions cancer "coming back", "recurrence",
+        # etc., it's a new diagnosis, not just further surgery from the original treatment.
+        if current_stage == "survivorship" and granular_root == "6":
+            evidence = " ".join(result_data.get("evidence_snippets", [])).lower()
+            combined = evidence + " " + user_message.lower()
+            if any(sig in combined for sig in _RECURRENCE_SIGNALS):
+                logger.info(
+                    f"Guard rail triggered: remapping further_surgery(6) → "
+                    f"newly_diagnosed(1) for recurrence from survivorship"
+                )
+                result_data["spec_stage"] = "newly_diagnosed"
+                result_data["stage"] = "1"
+                result_data["reasoning"] = (
+                    reasoning + " [Guard: recurrence from survivorship → newly_diagnosed]"
+                )
+
+        return result_data
