@@ -379,6 +379,21 @@ class PipelineOrchestrator:
                             metadata=ctx.metadata
                         )
             
+            # ─── Revert to profile stage for tone if no change was confirmed ───
+            # This prevents the Reasoning Agent from using the inferred stage's tone
+            # when the stage change hasn't been confirmed by the user yet.
+            if not stage_update_message and profile and profile.onboarding_completed:
+                logger.info(
+                    f"No stage change confirmed. Reverting ctx.stage_result from "
+                    f"{ctx.stage_result.stage} to profile stage {profile.current_stage} for tone."
+                )
+                ctx.stage_result = StageResult(
+                    stage=profile.current_stage,
+                    certainty=CertaintyLevel.HIGH,
+                    certainty_score=1.0,
+                    signals=["Profile stage (no change confirmed)"]
+                )
+            
             # Check for early abort (e.g., clarification needed)
             if ctx.should_abort:
                 return self._create_clarification_response(ctx, start_time, stage_update_message)
@@ -502,7 +517,9 @@ class PipelineOrchestrator:
         
         logger.info(
             f"Classification complete: intent={ctx.intent_result.intent}, "
-            f"stage={ctx.stage_result.stage}"
+            f"inferred_stage={ctx.stage_result.stage}, "
+            f"certainty={ctx.stage_result.certainty}, "
+            f"granular_id={ctx.metadata.get('granular_stage_id')}"
         )
         
         # Check if clarification is needed

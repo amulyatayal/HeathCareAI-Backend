@@ -280,12 +280,13 @@ class ReasoningAgent(BaseAgent):
         strict_mode = is_strict_rag(intent)
         citation_only_mode = is_citation_only(intent)
         
-        # Get stage guidelines
+        # Get stage guidelines (with detailed_stage_id for child-stage tone overrides)
         stage = PatientStage.UNKNOWN
         if context.stage_result:
             stage = context.stage_result.stage
         
-        stage_info = get_stage_guidelines(stage)
+        detailed_stage_id = context.metadata.get("granular_stage_id") if context.metadata else None
+        stage_info = get_stage_guidelines(stage, detailed_stage_id=detailed_stage_id)
         stage_guidelines = (
             f"- Tone: {stage_info.get('tone', 'warm and supportive')}\n"
             f"- Emphasize: {stage_info.get('emphasis', 'general support')}\n"

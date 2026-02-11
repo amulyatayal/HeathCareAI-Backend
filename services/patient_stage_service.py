@@ -587,12 +587,30 @@ STAGE_RESPONSE_GUIDELINES = {
     },
 }
 
-def get_stage_guidelines(stage: PatientStage) -> dict:
-    """Get response guidelines for a specific patient stage."""
+def get_stage_guidelines(stage: PatientStage, detailed_stage_id: str = None) -> dict:
+    """Get response guidelines for a specific patient stage.
+    
+    If a detailed_stage_id is provided, check for child-stage tone overrides
+    first (e.g. palliative 1.1 needs a different tone than generic newly_diagnosed).
+    """
+    # Check for detailed-stage-specific overrides first
+    if detailed_stage_id and detailed_stage_id in _DETAILED_STAGE_TONE_OVERRIDES:
+        return _DETAILED_STAGE_TONE_OVERRIDES[detailed_stage_id]
+    
     return STAGE_RESPONSE_GUIDELINES.get(
         stage,
         STAGE_RESPONSE_GUIDELINES[PatientStage.UNKNOWN]
     )
+
+
+# Tone overrides for specific child stages that differ significantly from their root
+_DETAILED_STAGE_TONE_OVERRIDES = {
+    "1.1": {  # Palliative / Living with secondary breast cancer
+        "tone": "compassionate and dignified",
+        "emphasis": "quality of life, comfort, support resources, honoring their experience",
+        "avoid": "false hope, dismissing their experience, 'stay positive' platitudes, curative language"
+    },
+}
 
 
 # ================================
