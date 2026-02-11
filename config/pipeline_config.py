@@ -56,25 +56,48 @@ INTENT_CATEGORIES: List[str] = [cat.value for cat in IntentCategory]
 
 # ================================
 # Patient Stages (Section 7.2)
+# Aligned 1:1 with root stages in stage_hierarchy.json
 # ================================
 
 class PatientStage(str, Enum):
     """
     Stages in a patient's medical journey.
+    Each value maps 1:1 to a root stage in stage_hierarchy.json.
     The Stage Agent infers which stage the user appears to be in.
     """
-    PRE_DIAGNOSIS = "pre_diagnosis"
-    AWAITING_RESULTS = "awaiting_results"
-    NEWLY_DIAGNOSED = "newly_diagnosed"
-    ACTIVE_TREATMENT = "active_treatment"
-    POST_TREATMENT = "post_treatment"
-    SURVEILLANCE = "surveillance"
-    PALLIATIVE_SUPPORT = "palliative_support"
+    # ─── Active values (1:1 with root stage IDs) ───
+    PRE_DIAGNOSIS = "pre_diagnosis"                     # Root ID 0
+    NEWLY_DIAGNOSED = "newly_diagnosed"                 # Root ID 1
+    SURGERY = "surgery"                                 # Root ID 2
+    NEOADJUVANT_CHEMO = "neoadjuvant_chemo"             # Root ID 3
+    NEOADJUVANT_ENDOCRINE = "neoadjuvant_endocrine"     # Root ID 4
+    SURVIVORSHIP = "survivorship"                       # Root ID 5
+    FURTHER_SURGERY = "further_surgery"                 # Root ID 6
+    ADJUVANT_RADIO = "adjuvant_radio"                   # Root ID 7
+    ADJUVANT_CHEMO = "adjuvant_chemo"                   # Root ID 8
+    ADJUVANT_ENDOCRINE = "adjuvant_endocrine"           # Root ID 9
+    ADJUVANT_ZOLEDRONIC = "adjuvant_zoledronic"         # Root ID 10
     UNKNOWN = "unknown"
 
+    # ─── Deprecated aliases (for DB backward compat) ───
+    # These allow old DynamoDB records to deserialize.
+    # Will be removed after all records are migrated.
+    ACTIVE_TREATMENT = "active_treatment"
+    POST_TREATMENT = "post_treatment"
+    AWAITING_RESULTS = "awaiting_results"
+    PALLIATIVE_SUPPORT = "palliative_support"
+    SURVEILLANCE = "surveillance"  # Renamed → SURVIVORSHIP
 
-# List of all patient stages for prompts
-PATIENT_STAGES: List[str] = [stage.value for stage in PatientStage]
+
+# Active stages only (excludes deprecated — used for LLM prompts)
+_DEPRECATED_STAGE_VALUES = {
+    "active_treatment", "post_treatment", "awaiting_results",
+    "palliative_support", "surveillance",
+}
+PATIENT_STAGES: List[str] = [
+    stage.value for stage in PatientStage
+    if stage.value not in _DEPRECATED_STAGE_VALUES
+]
 
 
 # ================================

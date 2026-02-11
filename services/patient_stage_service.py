@@ -419,28 +419,14 @@ class PatientStageService:
 
     def map_to_high_level(self, stage_id: str) -> PatientStage:
         """
-        Map a detailed stage ID (e.g., '1', '2.1.1') to a high-level PatientStage.
-        Using simple heuristics based on root ID.
+        Map a detailed stage ID (e.g., '1', '2.1.1') to a PatientStage.
+        Delegates to the canonical STAGE_ID_TO_PATIENT_STAGE mapping.
         """
+        from models.patient_profile import STAGE_ID_TO_PATIENT_STAGE
         if not stage_id:
             return PatientStage.UNKNOWN
-            
         root_id = stage_id.split('.')[0]
-        
-        mapping = {
-            "0": PatientStage.PRE_DIAGNOSIS,
-            "1": PatientStage.NEWLY_DIAGNOSED, # Results Clinic
-            "2": PatientStage.ACTIVE_TREATMENT, # Surgery
-            "3": PatientStage.ACTIVE_TREATMENT, # Chemo
-            "4": PatientStage.ACTIVE_TREATMENT, # Radio
-            "5": PatientStage.ACTIVE_TREATMENT, # Targeted
-            "6": PatientStage.ACTIVE_TREATMENT, # Hormone
-            "7": PatientStage.SURVEILLANCE,     # Follow Up
-            "8": PatientStage.PALLIATIVE_SUPPORT,
-            "9": PatientStage.PALLIATIVE_SUPPORT
-        }
-        
-        return mapping.get(root_id, PatientStage.UNKNOWN)
+        return STAGE_ID_TO_PATIENT_STAGE.get(root_id, PatientStage.UNKNOWN)
 
     # ===== Merged from stage_service_v2_1.py =====
 
@@ -527,21 +513,68 @@ class PatientStageService:
 # ================================
 
 STAGE_RESPONSE_GUIDELINES = {
+    # ─── Active stages (1:1 with root stage IDs) ───
     PatientStage.PRE_DIAGNOSIS: {
         "tone": "reassuring but not dismissive",
-        "emphasis": "importance of getting checked, not jumping to conclusions",
-        "avoid": "assuming they have cancer, detailed treatment info"
-    },
-    PatientStage.AWAITING_RESULTS: {
-        "tone": "calm and supportive",
-        "emphasis": "managing anxiety, what to expect from results",
-        "avoid": "speculation about diagnosis, worst-case scenarios"
+        "emphasis": "importance of getting checked, managing anxiety while awaiting results",
+        "avoid": "assuming they have cancer, detailed treatment info, worst-case scenarios"
     },
     PatientStage.NEWLY_DIAGNOSED: {
         "tone": "gentle and empathetic",
         "emphasis": "it's okay to feel overwhelmed, take time to process",
         "avoid": "information overload, statistics without context"
     },
+    PatientStage.SURGERY: {
+        "tone": "reassuring and practical",
+        "emphasis": "preparing for or recovering from surgery, wound care, body image",
+        "avoid": "downplaying surgical fears, rushed recovery expectations"
+    },
+    PatientStage.NEOADJUVANT_CHEMO: {
+        "tone": "supportive and goal-focused",
+        "emphasis": "treatment is shrinking the tumour before surgery, managing chemo side effects",
+        "avoid": "focusing on 'what if chemo doesn't work', information overload"
+    },
+    PatientStage.NEOADJUVANT_ENDOCRINE: {
+        "tone": "patient and long-term",
+        "emphasis": "hormone therapy before surgery, managing hot flashes and joint pain",
+        "avoid": "rushing the patient, dismissing 'mild' side effects"
+    },
+    PatientStage.SURVIVORSHIP: {
+        "tone": "reassuring and informative",
+        "emphasis": "importance of follow-ups, living well long-term, celebrating milestones",
+        "avoid": "excessive focus on recurrence anxiety"
+    },
+    PatientStage.FURTHER_SURGERY: {
+        "tone": "empathetic and normalizing",
+        "emphasis": "second surgery is common and planned, recovery expectations",
+        "avoid": "making it feel like a setback or failure"
+    },
+    PatientStage.ADJUVANT_RADIO: {
+        "tone": "encouraging and routine-oriented",
+        "emphasis": "daily treatment schedule, skin care, fatigue management",
+        "avoid": "trivializing the daily grind of radiation visits"
+    },
+    PatientStage.ADJUVANT_CHEMO: {
+        "tone": "resilient and side-effect aware",
+        "emphasis": "chemo after surgery, managing cumulative fatigue, blood counts",
+        "avoid": "'you should be glad surgery is done', dismissing post-surgical burden"
+    },
+    PatientStage.ADJUVANT_ENDOCRINE: {
+        "tone": "adherence-focused and supportive",
+        "emphasis": "long-term hormone therapy (5-10 years), managing side effects, 'new normal'",
+        "avoid": "dismissing ongoing concerns, expecting quick adjustment"
+    },
+    PatientStage.ADJUVANT_ZOLEDRONIC: {
+        "tone": "informative and encouraging",
+        "emphasis": "bone health, infusion schedule, long-term benefits",
+        "avoid": "overcomplicating the treatment, dismissing side effects"
+    },
+    PatientStage.UNKNOWN: {
+        "tone": "warm and open",
+        "emphasis": "general support, asking clarifying questions",
+        "avoid": "making assumptions about their situation"
+    },
+    # ─── Deprecated aliases (backward compat) ───
     PatientStage.ACTIVE_TREATMENT: {
         "tone": "practical and encouraging",
         "emphasis": "managing side effects, day-to-day coping",
@@ -552,21 +585,6 @@ STAGE_RESPONSE_GUIDELINES = {
         "emphasis": "recovery milestones, adjusting to 'new normal'",
         "avoid": "dismissing ongoing concerns, 'you should be grateful'"
     },
-    PatientStage.SURVEILLANCE: {
-        "tone": "reassuring and informative",
-        "emphasis": "importance of follow-ups, living well long-term",
-        "avoid": "excessive focus on recurrence anxiety"
-    },
-    PatientStage.PALLIATIVE_SUPPORT: {
-        "tone": "compassionate and dignified",
-        "emphasis": "comfort, quality of life, support resources",
-        "avoid": "false hope, dismissing their experience"
-    },
-    PatientStage.UNKNOWN: {
-        "tone": "warm and open",
-        "emphasis": "general support, asking clarifying questions",
-        "avoid": "making assumptions about their situation"
-    }
 }
 
 def get_stage_guidelines(stage: PatientStage) -> dict:

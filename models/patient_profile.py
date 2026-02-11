@@ -32,29 +32,28 @@ class OnboardingSituation(str, Enum):
 # Mapping from onboarding choices to pipeline stages
 SITUATION_TO_STAGE = {
     OnboardingSituation.WORRIED_ABOUT_SYMPTOMS: PatientStage.PRE_DIAGNOSIS,
-    OnboardingSituation.WAITING_FOR_RESULTS: PatientStage.AWAITING_RESULTS,
+    OnboardingSituation.WAITING_FOR_RESULTS: PatientStage.PRE_DIAGNOSIS,  # merged into pre_diagnosis
     OnboardingSituation.RECENTLY_DIAGNOSED: PatientStage.NEWLY_DIAGNOSED,
-    OnboardingSituation.CURRENTLY_IN_TREATMENT: PatientStage.ACTIVE_TREATMENT,
-    OnboardingSituation.FINISHED_TREATMENT: PatientStage.POST_TREATMENT,
-    OnboardingSituation.LONG_TERM_FOLLOWUP: PatientStage.SURVEILLANCE,
+    OnboardingSituation.CURRENTLY_IN_TREATMENT: PatientStage.ACTIVE_TREATMENT,  # deprecated; upgraded on read
+    OnboardingSituation.FINISHED_TREATMENT: PatientStage.SURVIVORSHIP,
+    OnboardingSituation.LONG_TERM_FOLLOWUP: PatientStage.SURVIVORSHIP,
     OnboardingSituation.PREFER_NOT_TO_SAY: PatientStage.UNKNOWN,
 }
 
 
-# Mapping from hierarchical stage IDs → broad PatientStage enum
-# Used when onboarding sends a detailed_stage_id (root stage selection)
+# Mapping from hierarchical stage IDs → PatientStage enum (1:1 with root stages)
 STAGE_ID_TO_PATIENT_STAGE = {
-    "0":  PatientStage.PRE_DIAGNOSIS,       # Pre-diagnosis
-    "1":  PatientStage.NEWLY_DIAGNOSED,      # Results Clinic (just diagnosed)
-    "2":  PatientStage.ACTIVE_TREATMENT,     # Surgery
-    "3":  PatientStage.ACTIVE_TREATMENT,     # Neoadjuvant Chemotherapy
-    "4":  PatientStage.ACTIVE_TREATMENT,     # Neoadjuvant endocrine treatment
-    "5":  PatientStage.SURVEILLANCE,         # Survivorship
-    "6":  PatientStage.ACTIVE_TREATMENT,     # Further surgery
-    "7":  PatientStage.ACTIVE_TREATMENT,     # Adjuvant radiotherapy
-    "8":  PatientStage.ACTIVE_TREATMENT,     # Adjuvant chemotherapy
-    "9":  PatientStage.POST_TREATMENT,       # Adjuvant endocrine therapy
-    "10": PatientStage.POST_TREATMENT,       # Adjuvant Zoledronic acid
+    "0":  PatientStage.PRE_DIAGNOSIS,           # Pre-diagnosis
+    "1":  PatientStage.NEWLY_DIAGNOSED,          # Results Clinic
+    "2":  PatientStage.SURGERY,                  # Surgery
+    "3":  PatientStage.NEOADJUVANT_CHEMO,        # Neoadjuvant Chemotherapy
+    "4":  PatientStage.NEOADJUVANT_ENDOCRINE,    # Neoadjuvant endocrine treatment
+    "5":  PatientStage.SURVIVORSHIP,             # Survivorship
+    "6":  PatientStage.FURTHER_SURGERY,          # Further surgery
+    "7":  PatientStage.ADJUVANT_RADIO,           # Adjuvant radiotherapy
+    "8":  PatientStage.ADJUVANT_CHEMO,           # Adjuvant chemotherapy
+    "9":  PatientStage.ADJUVANT_ENDOCRINE,       # Adjuvant endocrine therapy
+    "10": PatientStage.ADJUVANT_ZOLEDRONIC,      # Adjuvant Zoledronic acid
 }
 
 
@@ -329,8 +328,25 @@ class PatientProfile(BaseModel):
     
     @classmethod
     def from_dynamodb_item(cls, item: dict) -> "PatientProfile":
-        """Create from DynamoDB item."""
-        # DynamoDB stores everything as strings, parse back
+        """Create from DynamoDB item with deprecated stage migration."""
+        # ─── Read-time migration for deprecated current_stage values ───
+        _DEPRECATED_DIRECT_UPGRADE = {
+            "awaiting_results": "pre_diagnosis",
+            "palliative_support": "newly_diagnosed",
+            "surveillance": "survivorship",
+        }
+        stage = item.get('current_stage')
+        if stage in _DEPRECATED_DIRECT_UPGRADE:
+            item['current_stage'] = _DEPRECATED_DIRECT_UPGRADE[stage]
+        elif stage in ("active_treatment", "post_treatment"):
+            # Resolve from detailed_stage_id if available
+            dsid = item.get('detailed_stage_id')
+            if dsid:
+                root_id = dsid.split('.')[0]
+                new_val = STAGE_ID_TO_PATIENT_STAGE.get(root_id)
+                if new_val:
+                    item['current_stage'] = new_val.value
+            # else: keep deprecated alias (still valid enum value)
         return cls(**item)
 
 

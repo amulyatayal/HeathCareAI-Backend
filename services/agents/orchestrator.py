@@ -175,6 +175,10 @@ class PipelineOrchestrator:
                         certainty_score=1.0,
                         signals=["User-provided via onboarding"]
                     )
+                    # Pass current stage to StageAgentV2 for classification context
+                    ctx.metadata["profile_current_stage"] = profile.current_stage
+                    ctx.metadata["profile_detailed_stage_id"] = getattr(profile, 'detailed_stage_id', None)
+                    ctx.metadata["profile_detailed_stage_label"] = getattr(profile, 'detailed_stage_label', None)
                     logger.info(f"Loaded stage from profile: {profile.current_stage}")
                 else:
                     # Authenticated but no profile - prompt for onboarding
@@ -335,13 +339,23 @@ class PipelineOrchestrator:
                         if not proposed_name:
                             stage_display_names = {
                                 PatientStage.PRE_DIAGNOSIS: "Pre-Diagnosis",
-                                PatientStage.AWAITING_RESULTS: "Awaiting Results",
                                 PatientStage.NEWLY_DIAGNOSED: "Newly Diagnosed",
+                                PatientStage.SURGERY: "Surgery",
+                                PatientStage.NEOADJUVANT_CHEMO: "Neoadjuvant Chemotherapy",
+                                PatientStage.NEOADJUVANT_ENDOCRINE: "Neoadjuvant Endocrine Therapy",
+                                PatientStage.SURVIVORSHIP: "Survivorship",
+                                PatientStage.FURTHER_SURGERY: "Further Surgery",
+                                PatientStage.ADJUVANT_RADIO: "Adjuvant Radiotherapy",
+                                PatientStage.ADJUVANT_CHEMO: "Adjuvant Chemotherapy",
+                                PatientStage.ADJUVANT_ENDOCRINE: "Adjuvant Endocrine Therapy",
+                                PatientStage.ADJUVANT_ZOLEDRONIC: "Adjuvant Zoledronic Acid",
+                                PatientStage.UNKNOWN: "Unknown",
+                                # Deprecated aliases (backward compat)
                                 PatientStage.ACTIVE_TREATMENT: "Active Treatment",
                                 PatientStage.POST_TREATMENT: "Post-Treatment",
-                                PatientStage.SURVEILLANCE: "Surveillance",
+                                PatientStage.AWAITING_RESULTS: "Awaiting Results",
                                 PatientStage.PALLIATIVE_SUPPORT: "Palliative Support",
-                                PatientStage.UNKNOWN: "Unknown"
+                                PatientStage.SURVEILLANCE: "Surveillance",
                             }
                             proposed_name = stage_display_names.get(inferred.stage, str(inferred.stage))
                         

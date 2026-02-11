@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from services.agents.base_agent import BaseAgent
 from services.patient_stage_service import PatientStageService
 from models.schemas_pipeline import PipelineContext, StageResult, AgentTrace
-from config.pipeline_config import ModelType
+from config.pipeline_config import ModelType, PATIENT_STAGES
 
 logger = logging.getLogger(__name__)
 
@@ -62,18 +62,33 @@ class StageAgentV2(BaseAgent):
                 "1. Analyze the 'User Query' and 'Conversation History' against the 'Stage Hierarchy'.\n"
                 "2. Identify the most specific Stage ID (e.g., '2.1.2') that matches their situation.\n"
                 "3. Map this ID to one of the following broad categories: "
-                "['pre_diagnosis', 'awaiting_results', 'newly_diagnosed', 'active_treatment', "
-                "'post_treatment', 'surveillance', 'palliative_support', 'unknown'].\n"
+                f"{PATIENT_STAGES}.\n"
                 "4. Determine certainty: 'high' (>90%), 'medium' (>75%), 'low' (<50%).\n"
                 "5. SPECIAL RULE: If the 'Conversation History' shows the Assistant asking if the user is at a specific stage, "
                 "and the User replies with positive confirmation (e.g., 'Yes', 'Correct'), you MUST infer that stage with 'high' certainty.\n"
                 "6. Extract exact quotes from the user text as 'evidence_snippets'.\n"
                 "7. If the user does not provide enough information to infer a stage, set stage='unknown'.\n"
-                "8. Output valid JSON only."
+                "8. TEMPORAL CONTEXT RULE: Pay close attention to the 'Patient Current Stage'. "
+                "If the patient is already in a stage like 'surgery' and mentions starting chemo, "
+                "that means chemo AFTER surgery (adjuvant, Stage 8), not chemo BEFORE surgery (neoadjuvant, Stage 3). "
+                "Use the patient's current stage to disambiguate temporal references.\n"
+                "9. Output valid JSON only."
             )
+            
+            # Build patient context section
+            current_stage = context.metadata.get("profile_current_stage", "unknown")
+            detailed_id = context.metadata.get("profile_detailed_stage_id")
+            detailed_label = context.metadata.get("profile_detailed_stage_label")
+            patient_context = f"Current stage: {current_stage}"
+            if detailed_id:
+                patient_context += f" (detailed: {detailed_id}"
+                if detailed_label:
+                    patient_context += f" - {detailed_label}"
+                patient_context += ")"
             
             user_prompt = (
                 f"<stage_hierarchy>\n{hierarchy_context}\n</stage_hierarchy>\n\n"
+                f"<patient_current_stage>\n{patient_context}\n</patient_current_stage>\n\n"
                 f"<conversation_history>\n{history_text}\n</conversation_history>\n\n"
                 f"<user_query>\n{user_query}\n</user_query>\n\n"
                 "Classify the stage. Respond with this JSON structure:\n"
