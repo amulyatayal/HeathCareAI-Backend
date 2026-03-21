@@ -24,6 +24,8 @@ from config import settings
 from api import chat_router, knowledge_router, health_router, categories_router, forum_router
 # v2 API routes (new - multi-agent pipeline)
 from api import pipeline_router, health_v2_router, debug_router, profile_router
+# v2 Admin portal & patient resources
+from api import admin_router, resource_router
 
 # ================================
 # Logging Configuration
@@ -176,6 +178,10 @@ app.include_router(pipeline_router, prefix="/api/v2")
 app.include_router(health_v2_router, prefix="/api/v2")
 app.include_router(debug_router, prefix="/api/v2")
 app.include_router(profile_router, prefix="/api/v2")
+
+# Admin portal & patient resources
+app.include_router(admin_router, prefix="/api/v2/admin")
+app.include_router(resource_router, prefix="/api/v2")
 
 
 # ================================

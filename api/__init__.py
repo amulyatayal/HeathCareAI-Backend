@@ -22,6 +22,12 @@ from .routes import (
 )
 from .profile_routes import router as profile_router
 
+# ================================
+# v2 Admin Portal & Patient Resources
+# ================================
+from .admin_routes import router as admin_router
+from .resource_routes import router as resource_router
+
 __all__ = [
     # v1 (deprecated)
     'chat_router',
@@ -34,4 +40,7 @@ __all__ = [
     'health_v2_router',
     'debug_router',
     'profile_router',
+    # v2 admin & resources
+    'admin_router',
+    'resource_router',
 ]

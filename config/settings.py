@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window: int = 60
     
+    # Admin Portal
+    admin_jwt_secret: str = "change-me-in-production-use-a-real-secret"
+    admin_jwt_algorithm: str = "HS256"
+    admin_jwt_expiry_hours: int = 24
+    
     # Knowledge Base
     kb_chunk_size: int = 500
     kb_chunk_overlap: int = 50
