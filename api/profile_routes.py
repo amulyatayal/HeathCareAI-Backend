@@ -6,10 +6,9 @@ Requires authentication - guest users cannot access profile features.
 """
 
 import logging
-from typing import Optional, List
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
 
 from config.pipeline_config import PatientStage
 from models.patient_profile import (
@@ -29,110 +28,11 @@ from models.patient_stages import (
 )
 from services.patient_profile_service import get_patient_profile_service
 from services.patient_stage_service import get_patient_stage_service
+from api.auth import get_authenticated_user_id, get_user_id_allowing_guest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profile", tags=["Patient Profile"])
-
-
-# ================================
-# Authentication Dependency
-# ================================
-
-async def get_authenticated_user_id(request: Request) -> str:
-    """
-    Extract and verify user ID from authentication header.
-    
-    Supports:
-    - Firebase JWT: Authorization: Bearer <firebase_jwt>
-    - Google OAuth: Authorization: Bearer <google_jwt>
-    
-    Guest users (X-User-ID header) are NOT allowed for profile endpoints.
-    
-    Raises:
-        HTTPException 401: If not authenticated or using guest auth
-    """
-    auth_header = request.headers.get("Authorization")
-    guest_id = request.headers.get("X-User-ID")
-    
-    # Debug logging for auth troubleshooting
-    logger.info(f"[AUTH DEBUG] Endpoint: {request.url.path}")
-    logger.info(f"[AUTH DEBUG] Authorization header: {auth_header[:50] + '...' if auth_header and len(auth_header) > 50 else auth_header}")
-    logger.info(f"[AUTH DEBUG] X-User-ID header: {guest_id}")
-    
-    # Try to validate Authorization header FIRST (before rejecting guest users)
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        
-        try:
-            # Decode JWT to get user ID
-            # For production, use firebase_admin.auth.verify_id_token(token)
-            # For now, we'll decode without verification (frontend handles this)
-            from jwt import decode
-            decoded = decode(token, options={"verify_signature": False})
-            
-            # Try common JWT claims for user ID
-            user_id = (
-                decoded.get("sub") or 
-                decoded.get("user_id") or 
-                decoded.get("uid")
-            )
-            
-            logger.info(f"[AUTH DEBUG] Token decoded successfully. Claims: sub={decoded.get('sub')}, user_id={decoded.get('user_id')}, uid={decoded.get('uid')}")
-            logger.info(f"[AUTH DEBUG] Extracted user_id: {user_id}")
-            
-            if user_id:
-                logger.info(f"[AUTH DEBUG] Authentication SUCCESS for user: {user_id}")
-                return user_id  # Valid OAuth token found, return immediately
-            else:
-                logger.warning(f"[AUTH DEBUG] Token valid but no user_id found in claims")
-                
-        except Exception as e:
-            logger.error(f"[AUTH DEBUG] Token verification failed: {e}")
-            # Fall through to check for guest/no auth
-    
-    # ONLY reject guest users if no valid Authorization token was found above
-    if guest_id:
-        logger.warning(f"[AUTH DEBUG] REJECTED: Guest user {guest_id} tried to access profile endpoint")
-        raise HTTPException(
-            status_code=401,
-            detail="Profile features require authentication. Please sign in."
-        )
-    
-    # No valid authentication found at all
-    logger.warning(f"[AUTH DEBUG] REJECTED: No authentication provided")
-    raise HTTPException(
-        status_code=401,
-        detail="Authentication required for profile features"
-    )
-
-
-async def get_user_id_allowing_guest(request: Request) -> str:
-    """
-    Get user ID from Auth header OR X-User-ID (guest).
-    """
-    # 1. Try Authenticated User
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        try:
-            token = auth_header[7:]
-            from jwt import decode
-            decoded = decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
-            if user_id:
-                return user_id
-        except Exception:
-            pass # Fallback to guest check
-            
-    # 2. Try Guest User
-    guest_id = request.headers.get("X-User-ID")
-    if guest_id:
-        return guest_id
-        
-    raise HTTPException(
-        status_code=401,
-        detail="Authentication methods restricted. Login or Guest ID required."
-    )
 
 # ================================
 # Profile Endpoints

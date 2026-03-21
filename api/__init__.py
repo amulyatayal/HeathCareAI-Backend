@@ -28,6 +28,14 @@ from .profile_routes import router as profile_router
 from .admin_routes import router as admin_router
 from .resource_routes import router as resource_router
 
+# ================================
+# v2 Patient Tracking & Dashboard
+# ================================
+from .mood_routes import router as mood_router
+from .symptom_routes import router as symptom_router
+from .appointment_routes import router as appointment_router
+from .dashboard_routes import router as dashboard_router
+
 __all__ = [
     # v1 (deprecated)
     'chat_router',
@@ -43,4 +51,9 @@ __all__ = [
     # v2 admin & resources
     'admin_router',
     'resource_router',
+    # v2 patient tracking & dashboard
+    'mood_router',
+    'symptom_router',
+    'appointment_router',
+    'dashboard_router',
 ]
