@@ -128,10 +128,10 @@ class ModelType(str, Enum):
     ACCURATE = "accurate" # Claude Sonnet - for complex/medical tasks
 
 
-# Model ID mapping for AWS Bedrock
+# Model ID mapping for AWS Bedrock (cross-region inference profiles)
 MODEL_IDS = {
-    ModelType.FAST: "anthropic.claude-3-haiku-20240307-v1:0",
-    ModelType.ACCURATE: "anthropic.claude-3-sonnet-20240229-v1:0"  # Using Sonnet v1 (on-demand supported)
+    ModelType.FAST: "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+    ModelType.ACCURATE: "us.anthropic.claude-sonnet-4-6",
 }
 
 
