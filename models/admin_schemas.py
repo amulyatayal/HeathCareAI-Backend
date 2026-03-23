@@ -58,7 +58,7 @@ class PathwayResourceCreate(BaseModel):
     """Request body for creating a pathway resource."""
     clinician_name: str = Field(..., min_length=1, max_length=200)
     clinician_id: str = Field(..., min_length=1, max_length=100)
-    pathway_stage_ids: List[str] = Field(..., min_length=1)
+    pathway_stage_ids: List[str] = Field(default_factory=list)
     description: str = Field("", max_length=2000)
     intents: List[str] = Field(default_factory=list)
     resources: List[ResourceItem] = Field(..., min_length=1)
@@ -70,13 +70,6 @@ class PathwayResourceCreate(BaseModel):
         for intent in v:
             if intent not in valid:
                 raise ValueError(f"Invalid intent '{intent}'. Must be one of: {sorted(valid)}")
-        return v
-
-    @field_validator("pathway_stage_ids", mode="before")
-    @classmethod
-    def validate_stage_ids_not_empty(cls, v):
-        if not v:
-            raise ValueError("pathway_stage_ids must contain at least one stage ID")
         return v
 
 

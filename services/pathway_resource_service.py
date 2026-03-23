@@ -56,7 +56,7 @@ class PathwayResourceService:
             "resource_id": resource_id,
             "clinician_name": data["clinician_name"],
             "clinician_id": data["clinician_id"],
-            "pathway_stage_ids": data["pathway_stage_ids"],
+            "pathway_stage_ids": data.get("pathway_stage_ids", []),
             "description": data.get("description", ""),
             "intents": data.get("intents", []),
             "resources": [r if isinstance(r, dict) else r.dict() for r in data["resources"]],
