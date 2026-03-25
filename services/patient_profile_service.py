@@ -8,7 +8,7 @@ Uses only user-provided data (no inference).
 
 import logging
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Any, Dict
 from decimal import Decimal
 
 import boto3
@@ -112,6 +112,39 @@ class PatientProfileService:
         if profile:
             return profile
         return await self.create_profile(user_id)
+
+    async def upsert_explicit_mandatory_fields(
+        self,
+        user_id: str,
+        fields: Dict[str, Any],
+    ) -> PatientProfile:
+        """
+        Merge user-provided mandatory pipeline fields into explicit_data (e.g. weight_kg).
+
+        Used when the user supplies values in chat that should persist in DynamoDB.
+        Keys in `fields` use pipeline names (e.g. 'weight'); they are mapped to explicit_data.
+        """
+        profile = await self.get_or_create_profile(user_id)
+        now = datetime.utcnow()
+
+        if profile.explicit_data is None:
+            profile.explicit_data = PatientExplicitData()
+
+        if "weight" in fields and fields["weight"] is not None:
+            try:
+                profile.explicit_data.weight_kg = float(fields["weight"])
+            except (TypeError, ValueError):
+                logger.warning(f"Invalid weight value for {user_id}: {fields.get('weight')}")
+
+        profile.updated_at = now
+
+        try:
+            self.table.put_item(Item=profile.to_dynamodb_item())
+            logger.info(f"Updated explicit mandatory fields for user {user_id}: {list(fields.keys())}")
+            return profile
+        except ClientError as e:
+            logger.error(f"Error upserting explicit fields for {user_id}: {e}")
+            raise
     
     async def save_onboarding(
         self, 

@@ -125,6 +125,7 @@ class IntentAgent(BaseAgent):
             
             # Apply confidence-based logic
             intent_result = self._apply_confidence_rules(intent_result)
+            intent_result = self._apply_mandatory_followup_intent_overrides(context, intent_result)
             
             # Store in context
             context.intent_result = intent_result
@@ -187,6 +188,65 @@ class IntentAgent(BaseAgent):
             suggested_clarification=result.get("suggested_clarification")
         )
     
+    def _apply_mandatory_followup_intent_overrides(
+        self, context: PipelineContext, result: IntentResult
+    ) -> IntentResult:
+        """
+        After user replies with only mandatory data (e.g. weight), we restore the prior
+        question into user_message. If the model still returns UNKNOWN / low confidence,
+        infer intent from the restored text so we don't ask to 'rephrase'.
+        """
+        if not context.metadata.get("supplemental_user_message"):
+            return result
+        if not context.metadata.get("restored_user_message_from_followup"):
+            return result
+
+        result.clarification_needed = False
+
+        if result.intent == IntentCategory.UNKNOWN or result.confidence < IntentThresholds.CLARIFICATION_REQUIRED:
+            inferred = self._infer_intent_from_restored_question(context.user_message)
+            result.intent = inferred
+            result.confidence = max(result.confidence, 0.85)
+            result.reasoning = (
+                (result.reasoning or "")
+                + " [intent stabilized after mandatory-field follow-up]"
+            ).strip()
+
+        return result
+
+    def _infer_intent_from_restored_question(self, text: str) -> IntentCategory:
+        """Lightweight routing when the LLM is unsure on a restored follow-up turn."""
+        t = (text or "").lower()
+        if any(
+            k in t
+            for k in (
+                "exercise",
+                "walk",
+                "run",
+                "gym",
+                "yoga",
+                "physical activity",
+                "workout",
+            )
+        ):
+            return IntentCategory.EXERCISE
+        if any(
+            k in t
+            for k in (
+                "eat",
+                "food",
+                "diet",
+                "meal",
+                "recipe",
+                "nutrition",
+                "drink",
+                "snack",
+                "cook",
+            )
+        ):
+            return IntentCategory.NUTRITION
+        return IntentCategory.NUTRITION
+
     def _apply_confidence_rules(self, result: IntentResult) -> IntentResult:
         """Apply confidence threshold rules from spec."""
         

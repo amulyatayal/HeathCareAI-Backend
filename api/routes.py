@@ -31,6 +31,7 @@ from config.pipeline_config import (
     PATIENT_STAGES
 )
 from config.agent_routing import KnowledgeBase
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +85,9 @@ async def chat_v2(
     - Built-in safety guardrails
     - Sign-in prompts for guest users on stage-sensitive queries
     
-    Headers:
-    - Authorization: Bearer <token> for authenticated users
-    - X-User-ID: guest_xxx for guest users
+    Headers (all optional for chat):
+    - Authorization: Bearer <token> for signed-in users (loads profile)
+    - X-User-ID: optional guest session id (no login required)
     
     Query Parameters:
     - include_trace: Set to true to include detailed agent execution trace
@@ -94,8 +95,8 @@ async def chat_v2(
     start_time = time.time()
     
     try:
-        # Extract user identity from headers
-        user_id, is_guest = _extract_user_identity(authorization, x_user_id)
+        # Resolve signed-in user vs guest (guests never require OAuth; see resolve_chat_user_identity)
+        user_id, is_guest = resolve_chat_user_identity(authorization, x_user_id)
         
         # Get orchestrator
         orchestrator = get_orchestrator()
@@ -435,6 +436,31 @@ async def get_intent_routing(intent: str):
 
 from typing import Tuple
 
+def resolve_chat_user_identity(
+    authorization: Optional[str],
+    x_user_id: Optional[str],
+) -> Tuple[Optional[str], bool]:
+    """
+    Resolve user id + guest flag for chat.
+
+    - **Guests** never require OAuth: no Bearer is fine. Optional ``X-User-ID`` for session
+      tracking. Fully anonymous requests (no headers) are still allowed as guest.
+    - **Signed-in users**: ``Authorization: Bearer <JWT>`` yields ``(uid, is_guest=False)``.
+    - **Test bypass** (``IS_AUTHENTICATION_REQUIRED=N``): when there is no Bearer and no
+      ``X-User-ID``, assign ``unauthenticated_test_user_id`` so automated tests get a stable id.
+
+    Chat never returns 401 solely for missing auth headers.
+    """
+    settings = get_settings()
+    user_id, is_guest = _extract_user_identity(authorization, x_user_id)
+
+    # Test / integration bypass: synthetic id only when flag is N and request is fully anonymous
+    if not settings.chat_authentication_required:
+        if user_id is None and not (x_user_id and str(x_user_id).strip()):
+            return settings.unauthenticated_test_user_id, True
+    return user_id, is_guest
+
+
 def _extract_user_identity(
     authorization: Optional[str],
     x_user_id: Optional[str]
@@ -444,8 +470,9 @@ def _extract_user_identity(
     
     Returns:
         (user_id, is_guest) tuple:
-        - For authenticated users: (firebase_uid, False)
-        - For guest users: (None, True)
+        - For authenticated users: (uid from JWT, False)
+        - For guest users with X-User-ID: (guest session id, True)
+        - For fully anonymous guest: (None, True)
     """
     logger.info(f"_extract_user_identity called: auth={authorization[:50] if authorization else None}...")
     
@@ -468,10 +495,12 @@ def _extract_user_identity(
     else:
         logger.info(f"No valid Bearer token found (auth={authorization})")
     
-    # Guest user (X-User-ID is for session tracking, not profile)
-    if x_user_id:
-        logger.debug(f"Guest user with session ID: {x_user_id}")
-    
+    # Guest: optional X-User-ID for session tracking (no OAuth required)
+    if x_user_id and str(x_user_id).strip():
+        gid = str(x_user_id).strip()
+        logger.debug(f"Guest user with session ID: {gid}")
+        return (gid, True)
+
     return (None, True)
 
 

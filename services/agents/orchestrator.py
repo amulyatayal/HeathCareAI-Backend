@@ -33,6 +33,7 @@ from config.pipeline_config import IntentCategory, PatientStage, CertaintyLevel,
 from config.agent_routing import is_citation_only
 from config.settings import settings
 from services.metrics import record_latency, record_count
+from services.mandatory_followup_context import resolve_original_question_if_mandatory_followup
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,10 @@ class PipelineOrchestrator:
     Pipeline Flow (optimized):
     
     ┌─────────────────────────────────────────────────────────┐
-    │  PHASE 1: Classification (PARALLEL)                     │
+    │  PHASE 1: Classification (sequential)                  │
     │  ┌──────────┐   ┌──────────┐                           │
-    │  │  Intent  │   │  Stage   │  ← Run simultaneously     │
-    │  │  Agent   │   │  Agent   │                           │
+    │  │  Intent  │ → │  Stage   │  Intent first (mandatory   │
+    │  │  Agent   │   │  Agent   │  fields depend on intent) │
     │  └────┬─────┘   └────┬─────┘                           │
     │       └──────┬───────┘                                  │
     └──────────────┼──────────────────────────────────────────┘
@@ -141,6 +142,22 @@ class PipelineOrchestrator:
             session_id=session_id,
             conversation_history=conversation_history or []
         )
+        ctx.user_id = user_id
+        ctx.metadata["is_guest"] = is_guest
+
+        # User replied with e.g. weight only; restore original question for intent/RAG/reasoning
+        orig, supplemental = resolve_original_question_if_mandatory_followup(
+            message, conversation_history or []
+        )
+        if orig and supplemental:
+            ctx.metadata["supplemental_user_message"] = supplemental
+            ctx.user_message = orig
+            ctx.metadata["restored_user_message_from_followup"] = True
+            logger.info(
+                "Mandatory follow-up: using prior user question for pipeline; "
+                "parsing weight from supplemental message"
+            )
+
         self._current_request_id = ctx.request_id
         
         logger.info(f"Pipeline started: request_id={ctx.request_id}")
@@ -340,8 +357,12 @@ class PipelineOrchestrator:
                             sign_in_suggestion=None
                         )
             
-            # Check for early abort (e.g., clarification needed)
+            # Check for early abort (intent clarification or mandatory user data from StageAgentV2)
             if ctx.should_abort:
+                if ctx.abort_reason == "user_data_missing":
+                    return self._create_user_data_clarification_response(
+                        ctx, start_time, stage_update_message=stage_update_message
+                    )
                 return self._create_clarification_response(ctx, start_time, stage_update_message)
             
             # ============================================
@@ -415,24 +436,35 @@ class PipelineOrchestrator:
         self,
         ctx: PipelineContext
     ) -> PipelineContext:
-        """Run intent and stage classification in parallel."""
-        logger.info("Phase 1: Running classification (parallel)...")
-        
-        # Create tasks for parallel execution
-        intent_task = asyncio.create_task(self.intent_agent.run(ctx))
-        # Pass intent=None as they are parallel; StageAgentV2 handles this
-        stage_task = asyncio.create_task(self.stage_agent.run(ctx))
-        
-        # Wait for both to complete
-        (ctx_intent, intent_trace), (ctx_stage, stage_trace) = await asyncio.gather(
-            intent_task, stage_task
+        """Run intent first, then stage agent (mandatory user-data rules depend on intent)."""
+        logger.info("Phase 1: Running classification (intent → stage)...")
+
+        ctx_intent, intent_trace = await self.intent_agent.run(ctx)
+        ctx.intent_result = ctx_intent.intent_result
+        self._traces.append(intent_trace)
+
+        self._log_step(
+            step_name="intent_classification",
+            agent_name="intent_agent",
+            input_summary="",
+            output_summary=f"intent={ctx.intent_result.intent if ctx.intent_result else None}",
+            latency_ms=intent_trace.latency_ms,
+            model_used=None,
+            safety_flags=[],
         )
-        
+
+        if ctx.intent_result and ctx.intent_result.clarification_needed:
+            ctx.should_abort = True
+            ctx.abort_reason = "Clarification needed"
+            logger.info("Intent requested clarification; skipping stage agent")
+            return ctx
+
+        ctx_stage, stage_trace = await self.stage_agent.run(ctx)
+
         # Merge results into main context
         # Note: ctx objects are copies or same ref? usually copies in async if not careful, 
         # but here 'run' returns (updated_ctx, trace).
         
-        ctx.intent_result = ctx_intent.intent_result
         # Logic to prioritize Profile Stage vs Inferred Stage?
         # Spec 7.5 says "Stage inferred per request".
         # But for 'Context' passed to Reasoning Agent, we might prefer the Profile if it exists.
@@ -445,18 +477,22 @@ class PipelineOrchestrator:
         # AND we trigger a proposal.
         
         ctx.stage_result = ctx_stage.stage_result
-        # Merge metadata (granular id)
-        if ctx_stage.metadata.get("granular_stage_id"):
-            ctx.metadata["granular_stage_id"] = ctx_stage.metadata["granular_stage_id"]
+        # Merge stage metadata (granular id, user_data, user_data clarification, etc.)
+        if ctx_stage.metadata:
+            for k, v in ctx_stage.metadata.items():
+                ctx.metadata[k] = v
+        if ctx_stage.should_abort and ctx_stage.abort_reason:
+            ctx.should_abort = True
+            ctx.abort_reason = ctx_stage.abort_reason
         
-        # Store traces
-        self._traces.extend([intent_trace, stage_trace])
+        # Store stage trace (intent trace already recorded above)
+        self._traces.append(stage_trace)
         self._log_step(
             step_name="classification",
-            agent_name="intent_stage_parallel",
+            agent_name="intent_stage_sequential",
             input_summary="",
             output_summary=f"intent={ctx.intent_result.intent}, stage={ctx.stage_result.stage}",
-            latency_ms=max(intent_trace.latency_ms, stage_trace.latency_ms),
+            latency_ms=intent_trace.latency_ms + stage_trace.latency_ms,
             model_used=None,
             safety_flags=[],
         )
@@ -465,11 +501,6 @@ class PipelineOrchestrator:
             f"Classification complete: intent={ctx.intent_result.intent}, "
             f"stage={ctx.stage_result.stage}"
         )
-        
-        # Check if clarification is needed
-        if ctx.intent_result and ctx.intent_result.clarification_needed:
-            ctx.should_abort = True
-            ctx.abort_reason = "Clarification needed"
         
         return ctx
     
@@ -712,6 +743,40 @@ class PipelineOrchestrator:
             logger.info(f"Prepending stage_update_message to clarification: {stage_update_message}")
             clarification_text = stage_update_message + "\n\n" + clarification_text
         
+        return PipelineResponse(
+            request_id=ctx.request_id,
+            response=clarification_text,
+            intent=ctx.intent_result.intent if ctx.intent_result else IntentCategory.UNKNOWN,
+            stage=ctx.stage_result.stage if ctx.stage_result else "unknown",
+            citations=[],
+            confidence=0.5,
+            abstained=False,
+            disclaimer_included=False,
+            suggested_videos=[],
+            trace=self._traces,
+            total_latency_ms=total_latency
+        )
+
+    def _create_user_data_clarification_response(
+        self,
+        ctx: PipelineContext,
+        start_time: float,
+        stage_update_message: Optional[str] = None
+    ) -> PipelineResponse:
+        """
+        Create a response requesting missing mandatory user profile fields.
+        """
+        total_latency = int((time.time() - start_time) * 1000)
+
+        clarification_text = (
+            ctx.metadata.get("user_data_clarification_message")
+            if ctx.metadata
+            else None
+        ) or "To personalize your recommendations, could you please provide the missing information?"
+
+        if stage_update_message:
+            clarification_text = stage_update_message + "\n\n" + clarification_text
+
         return PipelineResponse(
             request_id=ctx.request_id,
             response=clarification_text,

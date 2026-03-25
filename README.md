@@ -68,6 +68,8 @@ AWS Bedrock (Claude) • OpenSearch (hybrid) • S3
    # Edit .env with your AWS credentials and endpoints
    ```
 
+   **Chat / guests** (`POST /api/v2/chat/`): **guests do not require OAuth**; `X-User-ID` is optional for session tracking. Signed-in users send `Authorization: Bearer <JWT>`. For automated tests that need a stable user id with **no** headers, set `IS_AUTHENTICATION_REQUIRED=N` (optional: `UNAUTHENTICATED_TEST_USER_ID`). See `tests/test_chat_authentication.py`.
+
 5. **Run the server**
    ```bash
    python main.py

@@ -6,7 +6,7 @@ Spec Reference: ProjectSpec.md v1.2, Section 8
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from services.agents.base_agent import BaseAgent, AgentError
 from services.agents.retrieval_agent import format_chunks_for_prompt, get_citations_from_chunks
@@ -151,6 +151,9 @@ REASONING_USER_TEMPLATE = """Patient Question: {question}
 
 Patient Stage: {stage} ({stage_certainty})
 {stage_context}
+
+Patient Profile Details:
+{user_profile_context}
 
 Please provide a helpful, evidence-based response."""
 
@@ -393,12 +396,26 @@ class ReasoningAgent(BaseAgent):
         
         # Determine certainty string
         certainty_str = stage_certainty.value if hasattr(stage_certainty, 'value') else str(stage_certainty)
-        
+
+        # Build a short summary of mandatory user profile fields (if provided).
+        user_profile_context = "No additional details available."
+        try:
+            if context.metadata:
+                user_data = context.metadata.get("user_data") or {}
+                if isinstance(user_data, dict) and user_data:
+                    lines: List[str] = []
+                    if user_data.get("weight") is not None:
+                        lines.append(f"- Weight: {user_data.get('weight')} kg")
+                    user_profile_context = "\n".join(lines) if lines else user_profile_context
+        except Exception as e:
+            logger.warning(f"Failed to format user profile context: {e}")
+
         return REASONING_USER_TEMPLATE.format(
             question=context.user_message,
             stage=stage,
             stage_certainty=certainty_str,
-            stage_context=stage_context
+            stage_context=stage_context,
+            user_profile_context=user_profile_context,
         )
     
     def _get_additional_rules(self, context: PipelineContext) -> str:

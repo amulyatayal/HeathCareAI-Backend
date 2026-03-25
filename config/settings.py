@@ -5,6 +5,7 @@ Loads from environment variables with sensible defaults
 
 import os
 from typing import List, Optional
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -44,6 +45,18 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_prefix: str = "/api/v1"
     
+    # Chat (POST /api/v2/chat/) — guests never require OAuth; optional X-User-ID for sessions.
+    # Y (default): normal behavior (anonymous guests use user_id=None unless X-User-ID is sent).
+    # N: when neither Bearer nor X-User-ID is sent, use unauthenticated_test_user_id (CI/tests).
+    is_authentication_required: str = Field(
+        default="Y",
+        description="Y=default guest handling; N=synthetic test user id when no headers (tests)",
+    )
+    unauthenticated_test_user_id: str = Field(
+        default="anonymous_test",
+        description="Guest user id when IS_AUTHENTICATION_REQUIRED=N and request has no Bearer/X-User-ID",
+    )
+    
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:8080"
     
@@ -65,6 +78,15 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production"""
         return self.app_env.lower() == "production"
+    
+    @property
+    def chat_authentication_required(self) -> bool:
+        """
+        True (default): normal chat — guests do not need OAuth.
+        False (N): use synthetic test user id for fully anonymous requests (tests only).
+        """
+        v = (self.is_authentication_required or "Y").strip().upper()
+        return v not in ("N", "NO", "0", "FALSE")
     
     class Config:
         env_file = ".env"

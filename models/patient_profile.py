@@ -70,6 +70,10 @@ class PatientExplicitData(BaseModel):
         None,
         description="When treatment ended (if applicable)"
     )
+    weight_kg: Optional[float] = Field(
+        None,
+        description="Body weight in kg (from onboarding or chat-captured mandatory fields)",
+    )
 
 
 # ================================

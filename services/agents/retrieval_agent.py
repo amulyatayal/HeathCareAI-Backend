@@ -28,6 +28,7 @@ from config.agent_routing import (
     is_citation_only
 )
 from services.knowledge_base import KnowledgeBaseService
+from services.retrieval_query_builder import build_retrieval_query
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,10 @@ class RetrievalAgent(BaseAgent):
         Returns:
             Updated context with retrieval_result populated
         """
-        logger.info(f"RetrievalAgent processing query: {context.user_message[:50]}...")
+        retrieval_query = build_retrieval_query(context)
+        context.metadata["retrieval_query"] = retrieval_query
+
+        logger.info(f"RetrievalAgent processing query: {retrieval_query[:80]}...")
         
         # Get intent from context (default to UNKNOWN if not classified)
         intent = IntentCategory.UNKNOWN
@@ -99,7 +103,7 @@ class RetrievalAgent(BaseAgent):
         try:
             result = await self._search_kb(
                 kb_name=primary_kb.value,
-                query=context.user_message,
+                query=retrieval_query,
                 min_chunks=min_chunks,
                 min_score=min_score,
                 require_keyword=require_keyword
@@ -112,7 +116,7 @@ class RetrievalAgent(BaseAgent):
                 for secondary_kb in knowledge_bases[1:]:
                     secondary_result = await self._search_kb(
                         kb_name=secondary_kb.value,
-                        query=context.user_message,
+                        query=retrieval_query,
                         min_chunks=min_chunks,
                         min_score=min_score,
                         require_keyword=require_keyword
