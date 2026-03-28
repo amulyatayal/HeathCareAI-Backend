@@ -4,9 +4,9 @@ Serves educational resources to patients based on their pathway stage.
 
 If the patient is authenticated and has a clinician association,
 resources are filtered to that clinician. Otherwise all resources
-for the stage are returned.
+for the stage (or all resources if no stage) are returned.
 
-Endpoint: GET /api/v2/resources?stage_id={stageId}
+Endpoint: GET /api/v2/resources?stage_id={stageId} (stage_id optional)
 """
 
 import logging
@@ -42,16 +42,25 @@ def _try_extract_user_id(request: Request) -> Optional[str]:
 @router.get("/resources", response_model=PatientResourceListResponse)
 async def get_resources_for_stage(
     request: Request,
-    stage_id: str = Query(..., description="Treatment pathway stage ID (e.g., '2', '2.1', '2.1.1')"),
+    stage_id: Optional[str] = Query(
+        None,
+        description=(
+            "Treatment pathway stage ID (e.g. '2', '2.1', '2.1.1'). "
+            "Omit to return resources for all stages (still scoped by clinician when associated)."
+        ),
+    ),
 ):
     """
-    Get educational resources relevant to a patient's pathway stage.
+    Get educational resources for a pathway stage, or all stages if ``stage_id`` is omitted.
 
-    Uses hierarchical matching -- a resource tagged with stage "2" (Surgery)
-    will also appear for a patient on stage "2.1.1" (Lumpectomy).
+    With ``stage_id``: uses hierarchical matching — a resource tagged with stage "2"
+    also appears for a patient on stage "2.1.1".
 
-    If the authenticated patient has a clinician association, only that
-    clinician's resources are returned. Otherwise all resources are returned.
+    Without ``stage_id``: returns every non-deleted resource row (all stages), with the
+    same clinician scoping rules as below.
+
+    If the authenticated patient has a clinician association, only that clinician's
+    resources are included. Otherwise resources from all clinicians are included.
     """
     resource_service = get_pathway_resource_service()
 
@@ -67,10 +76,18 @@ async def get_resources_for_stage(
         except Exception:
             pass
 
-    if clinician_id:
-        results = resource_service.get_resources_for_stage_and_clinician(stage_id, clinician_id)
+    stage = str(stage_id).strip() if stage_id is not None and str(stage_id).strip() else None
+
+    if stage:
+        if clinician_id:
+            results = resource_service.get_resources_for_stage_and_clinician(stage, clinician_id)
+        else:
+            results = resource_service.get_resources_for_stage(stage)
     else:
-        results = resource_service.get_resources_for_stage(stage_id)
+        if clinician_id:
+            results = resource_service.get_all_resources_for_clinician(clinician_id)
+        else:
+            results = resource_service.get_all_resources()
 
     return PatientResourceListResponse(
         resources=[PatientResourceResponse(**r) for r in results]
