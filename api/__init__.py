@@ -21,6 +21,7 @@ from .routes import (
     debug_router
 )
 from .profile_routes import router as profile_router
+from .profile_routes import me_router
 
 # ================================
 # v2 Admin Portal & Patient Resources
@@ -48,6 +49,7 @@ __all__ = [
     'health_v2_router',
     'debug_router',
     'profile_router',
+    'me_router',
     # v2 admin & resources
     'admin_router',
     'resource_router',

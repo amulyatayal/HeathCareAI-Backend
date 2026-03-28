@@ -222,6 +222,47 @@ class PathwayResourceService:
             logger.error(f"Error querying resources for stage {stage_id}: {e}")
             raise
     
+    def get_resources_for_stage_and_clinician(
+        self, stage_id: str, clinician_id: str
+    ) -> List[dict]:
+        """
+        Get resources for a stage filtered to a specific clinician.
+
+        Same hierarchical matching as get_resources_for_stage but only
+        returns resources created by the given clinician.
+        """
+        ancestor_ids = self._get_ancestor_chain(stage_id)
+
+        try:
+            response = self.table.query(
+                IndexName="clinician_id-index",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("clinician_id").eq(clinician_id),
+            )
+            items = response.get("Items", [])
+
+            results = []
+            for item in items:
+                if item.get("is_deleted", False):
+                    continue
+
+                tagged_stages = set(item.get("pathway_stage_ids", []))
+                if tagged_stages.intersection(ancestor_ids):
+                    for res in item.get("resources", []):
+                        results.append({
+                            "title": res.get("title", ""),
+                            "description": item.get("description", ""),
+                            "url": res.get("url", ""),
+                            "type": res.get("type", "link"),
+                            "intents": item.get("intents", []),
+                        })
+
+            return results
+        except ClientError as e:
+            logger.error(
+                f"Error querying resources for stage {stage_id}, clinician {clinician_id}: {e}"
+            )
+            raise
+
     # ================================
     # Helpers
     # ================================

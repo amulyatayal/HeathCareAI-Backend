@@ -188,6 +188,20 @@ class PatientProfile(BaseModel):
         description="When detailed stage was last updated"
     )
     
+    # Clinician association (set via access code)
+    clinician_id: Optional[str] = Field(
+        None,
+        description="Associated clinician's user ID"
+    )
+    clinician_name: Optional[str] = Field(
+        None,
+        description="Associated clinician's display name"
+    )
+    hospital_id: Optional[str] = Field(
+        None,
+        description="Hospital the patient is associated with"
+    )
+    
     class Config:
         use_enum_values = True
         json_encoders = {

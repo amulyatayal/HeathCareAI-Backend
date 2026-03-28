@@ -36,6 +36,7 @@ class AdminUser(BaseModel):
     name: str
     email: str
     role: str = "clinician"
+    hospital_id: Optional[str] = None
 
 
 class AdminLoginResponse(BaseModel):
@@ -114,6 +115,47 @@ class PathwayResourceListResponse(BaseModel):
 
 class DeleteResponse(BaseModel):
     message: str = "Resource deleted successfully"
+
+
+# ================================
+# Access Code Schemas
+# ================================
+
+class AccessCodeCreateRequest(BaseModel):
+    """Request body for generating an access code."""
+    hospital_id: str = Field(..., min_length=1, description="Hospital identifier for this code")
+
+
+class AccessCodeResponse(BaseModel):
+    """An access code as returned by the API."""
+    access_code: str
+    clinician_id: str
+    clinician_name: str
+    hospital_id: str
+    created_at: str
+    is_active: bool
+
+
+class AccessCodeListResponse(BaseModel):
+    """Response containing a list of access codes."""
+    codes: List[AccessCodeResponse]
+
+
+# ================================
+# Patient-Clinician Association Schemas
+# ================================
+
+class AssociateRequest(BaseModel):
+    """Request body for patient-clinician association."""
+    hospital_id: str = Field(..., min_length=1, description="Hospital ID for association")
+    access_code: Optional[str] = Field(None, description="Clinician access code")
+
+
+class AssociateResponse(BaseModel):
+    """Response after successful patient-clinician association."""
+    clinician_id: str
+    clinician_name: str
+    hospital_id: str
 
 
 # ================================

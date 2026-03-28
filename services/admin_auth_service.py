@@ -52,7 +52,7 @@ class AdminAuthService:
     # ================================
     
     @staticmethod
-    def create_token(user_id: str, email: str, role: str = "clinician") -> str:
+    def create_token(user_id: str, email: str, role: str = "clinician", hospital_id: str = None) -> str:
         payload = {
             "sub": user_id,
             "email": email,
@@ -60,6 +60,8 @@ class AdminAuthService:
             "iat": datetime.utcnow(),
             "exp": datetime.utcnow() + timedelta(hours=settings.admin_jwt_expiry_hours),
         }
+        if hospital_id:
+            payload["hospital_id"] = hospital_id
         return jwt.encode(payload, settings.admin_jwt_secret, algorithm=settings.admin_jwt_algorithm)
     
     @staticmethod
@@ -114,6 +116,7 @@ class AdminAuthService:
             user_id=user["user_id"],
             email=user["email"],
             role=user.get("role", "clinician"),
+            hospital_id=user.get("hospital_id"),
         )
         
         logger.info(f"Admin login successful: {email}")
@@ -125,6 +128,7 @@ class AdminAuthService:
                 "name": user["name"],
                 "email": user["email"],
                 "role": user.get("role", "clinician"),
+                "hospital_id": user.get("hospital_id"),
             },
         }
     
@@ -135,6 +139,7 @@ class AdminAuthService:
         name: str,
         role: str = "clinician",
         user_id: Optional[str] = None,
+        hospital_id: Optional[str] = None,
     ) -> dict:
         """
         Create a new admin user (used by seeding scripts).
@@ -155,6 +160,8 @@ class AdminAuthService:
             "created_at": now,
             "updated_at": now,
         }
+        if hospital_id:
+            item["hospital_id"] = hospital_id
         
         try:
             self.table.put_item(
@@ -162,7 +169,10 @@ class AdminAuthService:
                 ConditionExpression="attribute_not_exists(email)",
             )
             logger.info(f"Created admin user: {email} ({uid})")
-            return {"user_id": uid, "email": email, "name": name, "role": role}
+            result = {"user_id": uid, "email": email, "name": name, "role": role}
+            if hospital_id:
+                result["hospital_id"] = hospital_id
+            return result
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 raise ValueError(f"Admin user with email {email} already exists")

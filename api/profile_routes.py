@@ -6,6 +6,7 @@ Requires authentication - guest users cannot access profile features.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,13 +27,16 @@ from models.patient_stages import (
     StageTreeResponse,
     StageDetailResponse,
 )
+from models.admin_schemas import AssociateRequest, AssociateResponse
 from services.patient_profile_service import get_patient_profile_service
 from services.patient_stage_service import get_patient_stage_service
+from services.access_code_service import get_access_code_service
 from api.auth import get_authenticated_user_id, get_user_id_allowing_guest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profile", tags=["Patient Profile"])
+me_router = APIRouter(prefix="/me", tags=["Patient Profile"])
 
 # ================================
 # Profile Endpoints
@@ -325,4 +329,61 @@ async def get_my_stage(
         "breadcrumb": [],
         "message": "Using basic stage. Select a detailed stage for personalized responses."
     }
+
+
+# ================================
+# Patient-Clinician Association
+# ================================
+
+@me_router.post("/associate", response_model=AssociateResponse)
+async def associate_with_clinician(
+    body: AssociateRequest,
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    """
+    Associate the authenticated patient with a clinician via access code.
+
+    Looks up the access code to find the clinician, then stores the
+    association on the patient's profile. Idempotent — re-calling with
+    the same code updates the association rather than duplicating it.
+    """
+    if not body.access_code:
+        raise HTTPException(
+            status_code=400,
+            detail="access_code is required to associate with a clinician",
+        )
+
+    code_service = get_access_code_service()
+    code_info = code_service.lookup_code(body.access_code)
+
+    if not code_info:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid or expired access code",
+        )
+
+    profile_service = get_patient_profile_service()
+    profile = await profile_service.get_or_create_profile(user_id)
+
+    profile.clinician_id = code_info["clinician_id"]
+    profile.clinician_name = code_info["clinician_name"]
+    profile.hospital_id = body.hospital_id
+    profile.updated_at = datetime.utcnow()
+
+    from botocore.exceptions import ClientError
+    try:
+        profile_service.table.put_item(Item=profile.to_dynamodb_item())
+        logger.info(
+            f"Patient {user_id} associated with clinician {code_info['clinician_id']} "
+            f"at hospital {body.hospital_id}"
+        )
+    except ClientError as e:
+        logger.error(f"Error saving association for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save association")
+
+    return AssociateResponse(
+        clinician_id=code_info["clinician_id"],
+        clinician_name=code_info["clinician_name"],
+        hospital_id=body.hospital_id,
+    )
 
