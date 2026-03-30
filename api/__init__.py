@@ -36,6 +36,7 @@ from .mood_routes import router as mood_router
 from .symptom_routes import router as symptom_router
 from .appointment_routes import router as appointment_router
 from .dashboard_routes import router as dashboard_router
+from .notification_routes import router as notification_router
 
 __all__ = [
     # v1 (deprecated)
@@ -58,4 +59,5 @@ __all__ = [
     'symptom_router',
     'appointment_router',
     'dashboard_router',
+    'notification_router',
 ]

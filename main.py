@@ -27,7 +27,7 @@ from api import pipeline_router, health_v2_router, debug_router, profile_router,
 # v2 Admin portal & patient resources
 from api import admin_router, resource_router
 # v2 Patient tracking & dashboard
-from api import mood_router, symptom_router, appointment_router, dashboard_router
+from api import mood_router, symptom_router, appointment_router, dashboard_router, notification_router
 
 # ================================
 # Logging Configuration
@@ -191,6 +191,7 @@ app.include_router(mood_router, prefix="/api/v2")
 app.include_router(symptom_router, prefix="/api/v2")
 app.include_router(appointment_router, prefix="/api/v2")
 app.include_router(dashboard_router, prefix="/api/v2")
+app.include_router(notification_router, prefix="/api/v2")
 
 
 # ================================

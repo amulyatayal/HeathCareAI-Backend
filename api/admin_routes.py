@@ -22,9 +22,15 @@ from models.admin_schemas import (
     AccessCodeResponse,
     AccessCodeListResponse,
 )
+from models.notification_schemas import (
+    NotificationCreateRequest,
+    AdminNotificationResponse,
+    AdminNotificationListResponse,
+)
 from services.admin_auth_service import get_admin_auth_service
 from services.pathway_resource_service import get_pathway_resource_service
 from services.access_code_service import get_access_code_service
+from services.notification_service import get_notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -194,3 +200,56 @@ async def revoke_access_code(
         raise HTTPException(status_code=404, detail="Access code not found or already revoked")
 
     return DeleteResponse(message="Access code revoked successfully")
+
+
+# ================================
+# Notifications
+# ================================
+
+@router.post("/notifications", response_model=AdminNotificationResponse, status_code=201)
+async def create_notification(
+    body: NotificationCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Create and broadcast a notification to all patients associated with this clinician."""
+    clinician_id = admin["sub"]
+    clinician_name = admin.get("email", "")
+    auth_service = get_admin_auth_service()
+    user = auth_service.get_user_by_email(admin["email"])
+    if user:
+        clinician_name = user.get("name", clinician_name)
+
+    svc = get_notification_service()
+    result = svc.create_notification(
+        clinician_id=clinician_id,
+        clinician_name=clinician_name,
+        title=body.title,
+        message=body.message,
+        priority=body.priority.value,
+    )
+    return AdminNotificationResponse(**result)
+
+
+@router.get("/notifications", response_model=AdminNotificationListResponse)
+async def list_notifications(
+    admin: dict = Depends(get_current_admin),
+):
+    """List notifications sent by the authenticated clinician (newest first)."""
+    svc = get_notification_service()
+    items = svc.list_notifications_for_clinician(admin["sub"])
+    return AdminNotificationListResponse(
+        notifications=[AdminNotificationResponse(**i) for i in items]
+    )
+
+
+@router.delete("/notifications/{notification_id}", response_model=DeleteResponse)
+async def delete_notification(
+    notification_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """Soft-delete a notification (patients no longer see it)."""
+    svc = get_notification_service()
+    ok = svc.soft_delete_notification(notification_id, admin["sub"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return DeleteResponse(message="Notification deleted successfully")
