@@ -146,8 +146,13 @@ class PipelineOrchestrator:
         ctx.metadata["is_guest"] = is_guest
 
         # User replied with e.g. weight only; restore original question for intent/RAG/reasoning
+        history = conversation_history or []
+        logger.info(
+            f"Conversation history: {len(history)} turns received. "
+            f"Message: '{message[:80]}'"
+        )
         orig, supplemental = resolve_original_question_if_mandatory_followup(
-            message, conversation_history or []
+            message, history
         )
         if orig and supplemental:
             ctx.metadata["supplemental_user_message"] = supplemental
@@ -453,10 +458,15 @@ class PipelineOrchestrator:
             safety_flags=[],
         )
 
-        if ctx.intent_result and ctx.intent_result.clarification_needed:
+        # Only skip stage agent if intent is truly unresolvable (UNKNOWN).
+        # When intent is classified (e.g. nutrition) but LLM flagged clarification_needed,
+        # we still run the stage agent so mandatory field checks (like weight) can trigger.
+        if (ctx.intent_result
+                and ctx.intent_result.clarification_needed
+                and ctx.intent_result.intent == IntentCategory.UNKNOWN):
             ctx.should_abort = True
             ctx.abort_reason = "Clarification needed"
-            logger.info("Intent requested clarification; skipping stage agent")
+            logger.info("Intent is UNKNOWN with clarification needed; skipping stage agent")
             return ctx
 
         ctx_stage, stage_trace = await self.stage_agent.run(ctx)
@@ -482,8 +492,15 @@ class PipelineOrchestrator:
             for k, v in ctx_stage.metadata.items():
                 ctx.metadata[k] = v
         if ctx_stage.should_abort and ctx_stage.abort_reason:
+            # Mandatory field abort from stage agent takes priority
             ctx.should_abort = True
             ctx.abort_reason = ctx_stage.abort_reason
+        elif (not ctx.should_abort
+                and ctx.intent_result
+                and ctx.intent_result.clarification_needed):
+            # No mandatory field issue, but intent still wants clarification
+            ctx.should_abort = True
+            ctx.abort_reason = "Clarification needed"
         
         # Store stage trace (intent trace already recorded above)
         self._traces.append(stage_trace)

@@ -58,6 +58,17 @@ def parse_weight_kg(message: str) -> Optional[float]:
             except ValueError:
                 return None
 
+    # Bare number (e.g. "77", "68.5") — plausible weight range 20–400 kg
+    bare = msg_lower.strip()
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)", bare)
+    if m:
+        try:
+            val = float(m.group(1))
+            if 20.0 <= val <= 400.0:
+                return val
+        except ValueError:
+            pass
+
     return None
 
 
