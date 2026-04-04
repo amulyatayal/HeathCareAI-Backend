@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # S3 Configuration
     s3_bucket_name: str = "healthcare-ai-documents"
     s3_region: str = "us-east-1"
+    s3_document_prefix: str = "patient-documents"
+    patient_document_storage_limit_bytes: int = 100 * 1024 * 1024  # 100 MB per user
+    patient_document_max_file_bytes: int = 10 * 1024 * 1024  # 10 MB per file
     
     # Application Configuration
     app_env: str = "development"
