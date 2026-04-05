@@ -429,7 +429,27 @@ class PatientProfileService:
                     except ValueError:
                         item['explicit_data'][key] = None
         
+        if item.get("data_processing_paused") is None:
+            item["data_processing_paused"] = False
+        elif isinstance(item.get("data_processing_paused"), str):
+            item["data_processing_paused"] = item["data_processing_paused"].lower() in (
+                "true",
+                "1",
+                "yes",
+            )
         return PatientProfile(**item)
+
+    async def set_data_processing_paused(self, user_id: str, paused: bool) -> None:
+        """Persist GDPR flag: pause optional processing when data consent is withdrawn."""
+        profile = await self.get_or_create_profile(user_id)
+        profile.data_processing_paused = paused
+        profile.updated_at = datetime.utcnow()
+        try:
+            self.table.put_item(Item=profile.to_dynamodb_item())
+            logger.info("Set data_processing_paused=%s for user %s", paused, user_id)
+        except ClientError as e:
+            logger.error("Error updating data_processing_paused for %s: %s", user_id, e)
+            raise
 
 
 # ================================

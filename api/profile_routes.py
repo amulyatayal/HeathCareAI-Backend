@@ -9,7 +9,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from urllib.parse import quote
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 
 from config.pipeline_config import PatientStage
 from models.patient_profile import (
@@ -28,7 +30,24 @@ from models.patient_stages import (
     StageDetailResponse,
 )
 from models.admin_schemas import AssociateRequest, AssociateResponse
+from models.patient_compliance_api_schemas import (
+    ActivityLogResponse,
+    NomineeResponse,
+    NomineeUpsertRequest,
+    NomineeUpsertResponse,
+)
+from models.patient_privacy_schemas import (
+    AccountDeletionRequest,
+    AccountDeletionResponse,
+    DELETE_ACCOUNT_CONFIRMATION,
+)
 from services.patient_profile_service import get_patient_profile_service
+from services.patient_data_export_service import get_patient_data_export_service
+from services.patient_account_deletion_service import get_patient_account_deletion_service
+from services.patient_compliance_audit_service import get_patient_compliance_audit_service
+from services.patient_activity_log_service import get_patient_activity_log_service
+from services.patient_jurisdiction import is_india, resolve_jurisdiction
+from services.patient_nominee_service import get_patient_nominee_service
 from services.patient_stage_service import get_patient_stage_service
 from services.access_code_service import get_access_code_service
 from api.auth import get_authenticated_user_id, get_user_id_allowing_guest
@@ -37,6 +56,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/profile", tags=["Patient Profile"])
 me_router = APIRouter(prefix="/me", tags=["Patient Profile"])
+
+
+def _privacy_client_ip(request: Request) -> Optional[str]:
+    fwd = request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
+
+
+def _privacy_hospital_id(request: Request) -> Optional[str]:
+    return request.headers.get("X-Hospital-Id") or request.headers.get("x-hospital-id")
+
 
 # ================================
 # Profile Endpoints
@@ -385,5 +418,142 @@ async def associate_with_clinician(
         clinician_id=code_info["clinician_id"],
         clinician_name=code_info["clinician_name"],
         hospital_id=body.hospital_id,
+    )
+
+
+# ================================
+# GDPR / DPDPA — activity, nominee (India), export & erasure
+# ================================
+
+
+@me_router.get("/activity-log", response_model=ActivityLogResponse)
+async def get_my_activity_log(
+    limit: int = Query(20, ge=1, le=100),
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    return await get_patient_activity_log_service().list_for_user(user_id, limit=limit)
+
+
+@me_router.post("/nominee", response_model=NomineeUpsertResponse)
+async def upsert_my_nominee(
+    request: Request,
+    body: NomineeUpsertRequest,
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    profile = await get_patient_profile_service().get_profile(user_id)
+    hid = profile.hospital_id if profile else None
+    jurisdiction = resolve_jurisdiction(request, hid)
+    if not is_india(jurisdiction):
+        raise HTTPException(
+            status_code=403,
+            detail="Nominee registration is only available for India jurisdiction (DPDPA).",
+        )
+    nid = await get_patient_nominee_service().upsert_nominee(
+        user_id,
+        name=body.name,
+        email=body.email,
+        relationship=body.relationship,
+        phone=body.phone,
+        ip=_privacy_client_ip(request),
+        user_agent=request.headers.get("user-agent") or request.headers.get("User-Agent"),
+        hospital_id=_privacy_hospital_id(request) or hid,
+        jurisdiction=jurisdiction,
+    )
+    return NomineeUpsertResponse(message="Nominee saved.", nominee_id=nid)
+
+
+@me_router.get("/nominee", response_model=Optional[NomineeResponse])
+async def get_my_nominee(
+    request: Request,
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    profile = await get_patient_profile_service().get_profile(user_id)
+    hid = profile.hospital_id if profile else None
+    jurisdiction = resolve_jurisdiction(request, hid)
+    if not is_india(jurisdiction):
+        raise HTTPException(
+            status_code=403,
+            detail="Nominee is only applicable for India jurisdiction (DPDPA).",
+        )
+    data = get_patient_nominee_service().get_decrypted(user_id)
+    if not data:
+        return None
+    return NomineeResponse(**data)
+
+
+@me_router.get("/export")
+async def export_my_data(
+    request: Request,
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    """
+    Download a ZIP containing export.json (machine-readable patient data copy).
+    Logs a data_exported compliance event.
+    """
+    profile = await get_patient_profile_service().get_profile(user_id)
+    hid = profile.hospital_id if profile else None
+    jurisdiction = resolve_jurisdiction(request, hid)
+
+    export_svc = get_patient_data_export_service()
+    doc = await export_svc.build_export_document(user_id)
+    zbytes = export_svc.build_zip_bytes(doc)
+
+    await get_patient_compliance_audit_service().record_event(
+        user_id=user_id,
+        action="data_exported",
+        payload={
+            "export_version": doc.get("export_version"),
+            "artifact": "patient_export.zip",
+        },
+        ip=_privacy_client_ip(request),
+        user_agent=request.headers.get("user-agent") or request.headers.get("User-Agent"),
+        hospital_id=_privacy_hospital_id(request) or hid,
+        jurisdiction=jurisdiction,
+    )
+
+    date_str = datetime.utcnow().strftime("%Y%m%d")
+    filename = f"patient-data-export-{date_str}.zip"
+    quoted = quote(filename)
+    return Response(
+        content=zbytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"; filename*=UTF-8\'\'{quoted}'
+            ),
+        },
+    )
+
+
+@me_router.delete("", response_model=AccountDeletionResponse)
+async def delete_my_account(
+    request: Request,
+    body: AccountDeletionRequest = Body(...),
+    user_id: str = Depends(get_authenticated_user_id),
+):
+    """
+    Permanently delete the authenticated patient's account and associated DynamoDB rows.
+    Requires JSON body: {"confirmation": "DELETE MY ACCOUNT"}.
+    """
+    if body.confirmation != DELETE_ACCOUNT_CONFIRMATION:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Confirmation must be exactly "{DELETE_ACCOUNT_CONFIRMATION}"',
+        )
+
+    profile = await get_patient_profile_service().get_profile(user_id)
+    hid = profile.hospital_id if profile else None
+    jurisdiction = resolve_jurisdiction(request, hid)
+
+    await get_patient_account_deletion_service().erase_patient_data(
+        user_id,
+        ip=_privacy_client_ip(request),
+        user_agent=request.headers.get("user-agent") or request.headers.get("User-Agent"),
+        hospital_id=_privacy_hospital_id(request) or hid,
+        jurisdiction=jurisdiction,
+    )
+
+    return AccountDeletionResponse(
+        message="Your account and associated data have been deleted.",
     )
 

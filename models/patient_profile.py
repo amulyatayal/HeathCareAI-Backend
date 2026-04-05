@@ -201,7 +201,13 @@ class PatientProfile(BaseModel):
         None,
         description="Hospital the patient is associated with"
     )
-    
+
+    # GDPR / DPDPA: when True, optional processing should stop until data consent is re-granted
+    data_processing_paused: bool = Field(
+        default=False,
+        description="Set when patient withdraws data-processing consent (not erasure)",
+    )
+
     class Config:
         use_enum_values = True
         json_encoders = {

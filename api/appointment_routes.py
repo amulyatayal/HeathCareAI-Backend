@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import get_authenticated_user_id
+from api.compliance_dependencies import require_active_data_processing
 from models.appointment_schemas import (
     AppointmentCreate,
     Appointment,
@@ -25,7 +26,7 @@ router = APIRouter(tags=["Appointments"])
 @router.post("/appointments", response_model=Appointment, status_code=201)
 async def create_appointment(
     body: AppointmentCreate,
-    user_id: str = Depends(get_authenticated_user_id),
+    user_id: str = Depends(require_active_data_processing),
 ):
     """Create a new appointment."""
     service = get_appointment_service()

@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import get_authenticated_user_id
+from api.compliance_dependencies import require_active_data_processing
 from models.symptom_schemas import (
     SymptomEntryCreate,
     SymptomEntry,
@@ -25,7 +26,7 @@ router = APIRouter(tags=["Symptom Tracking"])
 @router.post("/symptoms", response_model=SymptomEntry, status_code=201)
 async def create_symptom_entry(
     body: SymptomEntryCreate,
-    user_id: str = Depends(get_authenticated_user_id),
+    user_id: str = Depends(require_active_data_processing),
 ):
     """Log a new symptom entry."""
     service = get_symptom_service()

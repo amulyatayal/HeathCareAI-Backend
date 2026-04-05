@@ -21,12 +21,12 @@ class MoodService:
     """
     Manages mood entries in DynamoDB.
     
-    Table: MoodEntries
+    Table: PatientMoodEntries
     PK: user_id (String)
     SK: timestamp (String, ISO 8601)
     """
 
-    TABLE_NAME = "MoodEntries"
+    TABLE_NAME = "PatientMoodEntries"
 
     def __init__(self):
         self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)

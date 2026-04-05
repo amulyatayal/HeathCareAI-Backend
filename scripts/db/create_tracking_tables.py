@@ -3,11 +3,14 @@
 Create DynamoDB tables for patient tracking features.
 
 Tables created:
-  - MoodEntries:     Mood tracking (user_id PK, timestamp SK)
-  - SymptomEntries:  Symptom tracking (user_id PK, timestamp SK)
-  - Appointments:    Appointment management (user_id PK, appointment_id SK, date GSI)
+  - PatientMoodEntries:  Patient mood tracking (user_id PK, timestamp SK)
+  - SymptomEntries:      Symptom tracking (user_id PK, timestamp SK)
+  - Appointments:        Appointment management (user_id PK, appointment_id SK, date GSI)
 
 Run with:  python scripts/db/create_tracking_tables.py
+
+Note: DynamoDB has no rename. If you previously used MoodEntries, migrate items to
+PatientMoodEntries (same key schema) then delete the old table.
 """
 
 import sys
@@ -49,10 +52,10 @@ def create_table(dynamodb, table_name: str, key_schema: list,
         return False
 
 
-def create_mood_entries(dynamodb):
+def create_patient_mood_entries(dynamodb):
     return create_table(
         dynamodb,
-        table_name="MoodEntries",
+        table_name="PatientMoodEntries",
         key_schema=[
             {"AttributeName": "user_id", "KeyType": "HASH"},
             {"AttributeName": "timestamp", "KeyType": "RANGE"},
@@ -125,17 +128,17 @@ def main():
 
     dynamodb = boto3.client("dynamodb", region_name=settings.aws_region)
 
-    ok1 = create_mood_entries(dynamodb)
+    ok1 = create_patient_mood_entries(dynamodb)
     ok2 = create_symptom_entries(dynamodb)
     ok3 = create_appointments(dynamodb)
 
     if ok1 and ok2 and ok3:
-        wait_for_tables(dynamodb, ["MoodEntries", "SymptomEntries", "Appointments"])
+        wait_for_tables(dynamodb, ["PatientMoodEntries", "SymptomEntries", "Appointments"])
         print()
         print("=" * 60)
         print("  Patient Tracking tables ready!")
         print()
-        print("  MoodEntries")
+        print("  PatientMoodEntries")
         print("    PK: user_id  SK: timestamp")
         print("    Attributes: entry_id, mood_score, note, emotions, triggers, quick_check")
         print()

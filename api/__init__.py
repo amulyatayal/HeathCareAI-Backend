@@ -37,6 +37,9 @@ from .symptom_routes import router as symptom_router
 from .appointment_routes import router as appointment_router
 from .dashboard_routes import router as dashboard_router
 from .notification_routes import router as notification_router
+from .patient_consent_routes import router as patient_consent_router
+from .patient_grievance_routes import router as patient_grievance_router
+from .patient_share_routes import router as patient_share_router
 
 __all__ = [
     # v1 (deprecated)
@@ -60,4 +63,7 @@ __all__ = [
     'appointment_router',
     'dashboard_router',
     'notification_router',
+    'patient_consent_router',
+    'patient_grievance_router',
+    'patient_share_router',
 ]

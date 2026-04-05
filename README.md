@@ -10,6 +10,7 @@ Multi-agent FastAPI backend for patient education (breast cancer focus), with ev
 - **📉 Structured Logs & Metrics**: Optional structured logging and metric emission toggles
 - **📱 Multi-Platform**: iOS / Android / Web ready
 - **☁️ AWS-Powered**: Bedrock (Claude), OpenSearch, S3
+- **👥 Community chat (planned)**: Room catalog API with **placeholder** rooms (disabled in UI) to prompt clinicians for channel ideas; suggestions endpoint (see [ProjectSpec.md](ProjectSpec.md) §21)
 
 ## 🏗️ Architecture (v2 pipeline)
 
@@ -128,6 +129,33 @@ HeathCareAI-Backend/
 | GET  | `/api/v2/health/ping` | Ping |
 | GET  | `/api/v2/debug/routing/{intent}` | Inspect routing (KB/model/strict_rag) |
 | POST | `/api/v2/debug/analyze` | Intent+stage only (no full answer) |
+
+### Community chat (phase 1 — spec in ProjectSpec §21)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v2/community/chat-rooms` | List rooms (includes **placeholder** seeds: `is_joinable` / `is_messageable` false for UI disabled state) |
+| POST | `/api/v2/community/chat-room-suggestions` | Authenticated: submit a suggested room (`title`, optional `description`, `rationale`) |
+
+**Example list response (illustrative):**
+
+```json
+{
+  "rooms": [
+    {
+      "id": "seed-newly-diagnosed",
+      "title": "Newly diagnosed",
+      "description": "Peer support for people starting their journey.",
+      "status": "placeholder",
+      "is_joinable": false,
+      "is_messageable": false,
+      "sort_order": 10
+    }
+  ]
+}
+```
+
+Phase 1 does **not** include WebSockets or messaging; implement when the routes and DB exist per the spec.
 
 ### v1 (deprecated, single-agent)
 

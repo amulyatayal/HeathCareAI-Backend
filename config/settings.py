@@ -3,8 +3,10 @@ Application Settings and Configuration
 Loads from environment variables with sensible defaults
 """
 
+import json
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
+
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -60,7 +62,27 @@ class Settings(BaseSettings):
     kb_chunk_size: int = 500
     kb_chunk_overlap: int = 50
     kb_embedding_dimension: int = 1024
-    
+
+    # Patient compliance (GDPR / DPDPA)
+    # JSON object: { "hospital_slug_or_id": "IN" | "UK", ... } for X-Hospital-Id / profile.hospital_id
+    hospital_jurisdiction_map_json: str = "{}"
+    # Fernet key (urlsafe base64, 44 chars) from: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    patient_nominee_fernet_key: Optional[str] = None
+    grievance_notify_webhook_url: Optional[str] = None
+    patient_share_ttl_hours: int = 168
+    # Optional public URL prefix for share links returned to clients (e.g. https://app.example.com/shared)
+    patient_share_public_base_url: str = ""
+
+    @property
+    def hospital_jurisdiction_map(self) -> Dict[str, str]:
+        try:
+            raw = json.loads(self.hospital_jurisdiction_map_json or "{}")
+            if not isinstance(raw, dict):
+                return {}
+            return {str(k): str(v).upper() for k, v in raw.items()}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
     @property
     def cors_origins(self) -> List[str]:
         """Parse CORS origins from comma-separated string"""

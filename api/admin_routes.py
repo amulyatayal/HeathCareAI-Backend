@@ -13,10 +13,12 @@ from models.admin_schemas import (
     AdminLoginRequest,
     AdminLoginResponse,
     AdminUser,
+    AdminPatientShareItem,
     PathwayResourceCreate,
     PathwayResourceUpdate,
     PathwayResourceResponse,
     PathwayResourceListResponse,
+    PatientSharesListResponse,
     DeleteResponse,
     AccessCodeCreateRequest,
     AccessCodeResponse,
@@ -31,6 +33,7 @@ from services.admin_auth_service import get_admin_auth_service
 from services.pathway_resource_service import get_pathway_resource_service
 from services.access_code_service import get_access_code_service
 from services.notification_service import get_notification_service
+from services.admin_patient_share_service import get_admin_patient_share_service
 
 logger = logging.getLogger(__name__)
 
@@ -253,3 +256,25 @@ async def delete_notification(
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
     return DeleteResponse(message="Notification deleted successfully")
+
+
+# ================================
+# Patient data shares (clinician)
+# ================================
+
+
+@router.get("/patient-shares", response_model=PatientSharesListResponse)
+async def list_patient_shares(
+    admin: dict = Depends(get_current_admin),
+):
+    """
+    List data-share links created by patients associated with this clinician.
+
+    Newest first, capped server-side. Raw tokens are not stored and are not returned;
+    clients derive status (active / expired / revoked) from timestamps.
+    """
+    clinician_id = admin.get("sub") or ""
+    rows = get_admin_patient_share_service().list_for_clinician(clinician_id)
+    return PatientSharesListResponse(
+        shares=[AdminPatientShareItem(**r) for r in rows]
+    )
