@@ -10,12 +10,16 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from decimal import Decimal
 
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
+
 from config.aws import get_dynamodb_table
 
 logger = logging.getLogger(__name__)
 
 # DynamoDB table name
 CONVERSATIONS_TABLE = "ChatConversations"
+USER_CREATED_GSI = "user_id-created_at-index"
 
 
 class ConversationLogger:
@@ -198,20 +202,32 @@ class ConversationLogger:
         user_id: str,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
-        """Get conversations for a specific user"""
+        """Get conversations for a specific user (GSI query when available, else scan)."""
         try:
             table = self._get_table()
-            
-            # Note: This requires a GSI on user_id for efficient queries
-            # For now, using scan (not efficient for large tables)
+            try:
+                response = table.query(
+                    IndexName=USER_CREATED_GSI,
+                    KeyConditionExpression=Key("user_id").eq(user_id),
+                    ScanIndexForward=False,
+                    Limit=limit,
+                )
+                return response.get("Items", [])
+            except ClientError as e:
+                code = e.response.get("Error", {}).get("Code", "")
+                if code not in ("ValidationException", "ResourceNotFoundException"):
+                    raise
+                logger.debug(
+                    "ChatConversations GSI %s unavailable (%s); falling back to scan",
+                    USER_CREATED_GSI,
+                    code,
+                )
             response = table.scan(
                 FilterExpression="user_id = :uid",
                 ExpressionAttributeValues={":uid": user_id},
-                Limit=limit
+                Limit=limit,
             )
-            
             return response.get("Items", [])
-            
         except Exception as e:
             logger.error(f"Failed to get user conversations: {e}")
             return []

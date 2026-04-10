@@ -4,7 +4,7 @@ Pydantic models for admin authentication and pathway resource management.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
@@ -36,6 +36,7 @@ class AdminUser(BaseModel):
     name: str
     email: str
     role: str = "clinician"
+    hospital_id: Optional[str] = None
 
 
 class AdminLoginResponse(BaseModel):
@@ -117,6 +118,47 @@ class DeleteResponse(BaseModel):
 
 
 # ================================
+# Access Code Schemas
+# ================================
+
+class AccessCodeCreateRequest(BaseModel):
+    """Request body for generating an access code."""
+    hospital_id: str = Field(..., min_length=1, description="Hospital identifier for this code")
+
+
+class AccessCodeResponse(BaseModel):
+    """An access code as returned by the API."""
+    access_code: str
+    clinician_id: str
+    clinician_name: str
+    hospital_id: str
+    created_at: str
+    is_active: bool
+
+
+class AccessCodeListResponse(BaseModel):
+    """Response containing a list of access codes."""
+    codes: List[AccessCodeResponse]
+
+
+# ================================
+# Patient-Clinician Association Schemas
+# ================================
+
+class AssociateRequest(BaseModel):
+    """Request body for patient-clinician association."""
+    hospital_id: str = Field(..., min_length=1, description="Hospital ID for association")
+    access_code: Optional[str] = Field(None, description="Clinician access code")
+
+
+class AssociateResponse(BaseModel):
+    """Response after successful patient-clinician association."""
+    clinician_id: str
+    clinician_name: str
+    hospital_id: str
+
+
+# ================================
 # Patient-Facing Resource Schemas
 # ================================
 
@@ -132,3 +174,29 @@ class PatientResourceResponse(BaseModel):
 class PatientResourceListResponse(BaseModel):
     """Response containing resources for a patient's stage."""
     resources: List[PatientResourceResponse]
+
+
+# ================================
+# Admin: patient data shares (clinician-visible metadata)
+# ================================
+
+
+class AdminPatientShareItem(BaseModel):
+    """One share created by a patient linked to this clinician. Raw token is never returned."""
+
+    share_id: str
+    patient_ref_id: str
+    created_at: str
+    expires_at: str
+    revoked_at: Optional[str] = None
+    scope: Dict[str, Any] = Field(default_factory=dict)
+    token: Optional[str] = Field(
+        default=None,
+        description="Not populated; only token hash is stored server-side.",
+    )
+
+
+class PatientSharesListResponse(BaseModel):
+    """Shares for patients associated with the authenticated clinician (newest first, capped)."""
+
+    shares: List[AdminPatientShareItem]

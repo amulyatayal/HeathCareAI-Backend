@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, Depends, Query
 
 from api.auth import get_authenticated_user_id
+from api.compliance_dependencies import require_active_data_processing
 from models.mood_schemas import MoodEntryCreate, MoodEntry, MoodListResponse
 from services.mood_service import get_mood_service
 
@@ -19,7 +20,7 @@ router = APIRouter(tags=["Mood Tracking"])
 @router.post("/mood", response_model=MoodEntry, status_code=201)
 async def create_mood_entry(
     body: MoodEntryCreate,
-    user_id: str = Depends(get_authenticated_user_id),
+    user_id: str = Depends(require_active_data_processing),
 ):
     """Log a new mood entry."""
     service = get_mood_service()

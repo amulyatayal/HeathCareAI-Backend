@@ -149,6 +149,7 @@ def create_chat_conversations_table():
     Create ChatConversations table (for conversation logging).
     
     Primary Key: conversation_id (PK) + created_at (SK)
+    GSI: user_id-created_at-index for per-patient export/erasure (see also add_chatconversations_user_id_gsi.py for existing tables).
     """
     table_name = "ChatConversations"
     
@@ -162,6 +163,17 @@ def create_chat_conversations_table():
             AttributeDefinitions=[
                 {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
                 {'AttributeName': 'created_at', 'AttributeType': 'N'},
+                {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'user_id-created_at-index',
+                    'KeySchema': [
+                        {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                        {'AttributeName': 'created_at', 'KeyType': 'RANGE'},
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
             ],
             BillingMode='PAY_PER_REQUEST',
         )

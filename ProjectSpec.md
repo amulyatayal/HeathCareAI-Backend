@@ -1,13 +1,14 @@
 
 # Patient Education Multi-Agent System — Requirements Specification
 
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Canonical (single source of truth)
 **Audience:** Engineers, Cursor, AI Platform
 **Domain:** Patient-facing medical education (non-clinical)
-**Last Updated:** January 23, 2026
+**Last Updated:** March 30, 2026
 
 ### Changelog
+- v1.4: Community chat backend — room catalog, placeholder (disabled) seed rooms, clinician room suggestions (phase 1 APIs; no realtime messaging)
 - v1.3: Added citation-only mode, clickable source URLs, show_sources flag, video retrieval agent, Q&A knowledge bases
 - v1.2: Added KB integration, thresholds, error handling, performance optimization, extended logging
 - v1.1: Expanded agent_map with knowledge_base and model routing
@@ -933,7 +934,85 @@ interface PipelineLog {
 
 ---
 
-## 21. Cursor Implementation Directive (AUTHORITATIVE)
+## 21. Community Chat Backend
+
+This section defines **REST APIs and data** for a **community chat room catalog**. It is **orthogonal** to Sections 1–20 (multi-agent pipeline): community endpoints do not run intent/stage/reasoning/validator unless explicitly integrated later.
+
+### 21.1 Goals
+
+* Provide a **list of chat rooms** for the client UI.
+* **Phase 1** ships **seed “placeholder” rooms** that are visible but **not joinable and not messageable**, so the UI can render them **disabled** and prompt **clinicians** to suggest which real channels should exist.
+* Accept **authenticated** submissions of **room suggestions** (title + optional text); persist for review (no requirement to auto-promote to live rooms in phase 1).
+
+### 21.2 Non-Goals (Phase 1)
+
+* WebSockets, typing indicators, or message history APIs.
+* Moderation or admin approval workflows beyond storing suggestions (may be phase 2).
+* Using community chat as a substitute for the educational pipeline or clinical advice.
+
+### 21.3 API Contract (`/api/v2`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v2/community/chat-rooms` | Authenticated (recommended; align with other patient/clinician APIs) | Returns the room catalog for UI listing. |
+| POST | `/api/v2/community/chat-room-suggestions` | Required | Clinician (or authenticated role per product) submits a suggested room. |
+
+**List response** MUST always include seeded placeholders (and any future `active` rooms). **404** only when requesting a **specific** unknown room id (if a detail route is added later).
+
+**Suggestion request body (conceptual):**
+
+```ts
+interface ChatRoomSuggestionRequest {
+  title: string;
+  description?: string;
+  rationale?: string;
+}
+```
+
+Store: `submitter_user_id` (from auth), `created_at`, and a status such as `pending` for future review.
+
+### 21.4 Room Catalog Item
+
+Each room returned by the list endpoint MUST include at least:
+
+```ts
+interface CommunityChatRoom {
+  id: string;                    // stable id (UUID or slug)
+  title: string;
+  description?: string;
+  status: "placeholder" | "active" | "archived";
+  is_joinable: boolean;          // false for placeholder
+  is_messageable: boolean;       // false for placeholder
+  sort_order: number;
+  category?: string;
+  created_at?: string;           // ISO-8601
+}
+```
+
+The UI MUST treat `placeholder` (or `!is_joinable`) as **disabled** rows—no navigation to a live thread in phase 1.
+
+### 21.5 Persistence
+
+* Table **`community_chat_rooms`**: columns aligned with `CommunityChatRoom`; index on `status`, `sort_order`.
+* Table **`community_chat_room_suggestions`**: suggestion fields + `user_id` + `status` + timestamps.
+* **Seed script** (e.g. under `scripts/db/`): create tables and insert **3–5** placeholder rows, breast-cancer / patient-education aligned, for example:
+  * Newly diagnosed
+  * Treatment side effects
+  * Nutrition and wellness
+  * Caregiver corner
+  * Recovery and life after treatment
+
+Titles/descriptions are adjustable in seed data; **behavior** (placeholder, not joinable) is fixed for phase 1 seeds.
+
+### 21.6 Implementation Notes
+
+* Follow existing FastAPI layout: thin routers under `api/`, Pydantic models under `models/`, services under `services/`.
+* Future message APIs MUST reject or **403** for non-`active` rooms.
+* Product copy remains **educational / non-clinical**; community features do not override Section 1 safety rules for the AI chat pipeline.
+
+---
+
+## 22. Cursor Implementation Directive (AUTHORITATIVE)
 
 > Implement exactly what is specified here.
 > Do not add memory, autonomy, or shortcuts.

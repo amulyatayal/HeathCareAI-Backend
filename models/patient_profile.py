@@ -192,6 +192,26 @@ class PatientProfile(BaseModel):
         description="When detailed stage was last updated"
     )
     
+    # Clinician association (set via access code)
+    clinician_id: Optional[str] = Field(
+        None,
+        description="Associated clinician's user ID"
+    )
+    clinician_name: Optional[str] = Field(
+        None,
+        description="Associated clinician's display name"
+    )
+    hospital_id: Optional[str] = Field(
+        None,
+        description="Hospital the patient is associated with"
+    )
+
+    # GDPR / DPDPA: when True, optional processing should stop until data consent is re-granted
+    data_processing_paused: bool = Field(
+        default=False,
+        description="Set when patient withdraws data-processing consent (not erasure)",
+    )
+
     class Config:
         use_enum_values = True
         json_encoders = {

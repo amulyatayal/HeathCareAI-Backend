@@ -42,6 +42,9 @@ redis==5.0.1
 PyJWT==2.8.0
 bcrypt==4.1.2
 
+# Compliance (nominee field encryption at application layer)
+cryptography==42.0.5
+
 # Utilities
 tenacity==8.2.3
 structlog==24.1.0

@@ -20,7 +20,7 @@ from .routes import (
     health_v2_router,
     debug_router
 )
-from .profile_routes import router as profile_router
+from .profile_routes import me_router, router as profile_router
 from .document_routes import router as document_router
 
 # ================================
@@ -36,6 +36,10 @@ from .mood_routes import router as mood_router
 from .symptom_routes import router as symptom_router
 from .appointment_routes import router as appointment_router
 from .dashboard_routes import router as dashboard_router
+from .notification_routes import router as notification_router
+from .patient_consent_routes import router as patient_consent_router
+from .patient_grievance_routes import router as patient_grievance_router
+from .patient_share_routes import router as patient_share_router
 
 __all__ = [
     # v1 (deprecated)
@@ -50,6 +54,7 @@ __all__ = [
     'debug_router',
     'profile_router',
     'document_router',
+    'me_router',
     # v2 admin & resources
     'admin_router',
     'resource_router',
@@ -58,4 +63,8 @@ __all__ = [
     'symptom_router',
     'appointment_router',
     'dashboard_router',
+    'notification_router',
+    'patient_consent_router',
+    'patient_grievance_router',
+    'patient_share_router',
 ]
