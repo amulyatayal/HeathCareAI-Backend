@@ -6,12 +6,19 @@ Loads from environment variables with sensible defaults
 import os
 from typing import List, Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
     
     # AWS Configuration
     aws_region: str = "us-east-1"
@@ -59,6 +66,34 @@ class Settings(BaseSettings):
         default="anonymous_test",
         description="Guest user id when IS_AUTHENTICATION_REQUIRED=N and request has no Bearer/X-User-ID",
     )
+
+    # Dev / QA: non-Google sign-in that mirrors Google JWT shape (sub, email, name, picture).
+    # Server mints HS256 JWTs with iss=anvega-test; disabled by default.
+    enable_test_user_login: bool = Field(
+        default=False,
+        description="When True, POST /api/v1/auth/test-session may issue tokens for test.anvega* users",
+    )
+    test_user_jwt_secret: str = Field(
+        default="change-me-test-user-jwt-secret",
+        description="HS256 secret for test-user tokens (set in env for any shared environment)",
+    )
+    test_user_sub_prefix: str = Field(
+        default="test.anvega",
+        description="Test user sub prefix; allowed ids are {prefix}{digits} only (e.g. test.anvega1)",
+    )
+    test_user_token_ttl_days: int = Field(
+        default=7,
+        ge=1,
+        le=30,
+        description="Expiry for minted test-user JWTs",
+    )
+    # When True, all Bearer handling uses the original unverified jwt.decode path only (no
+    # anvega-test HS256 verification). Set True to revert to pre-test-user behavior while
+    # keeping test-session minting available for other experiments.
+    patient_bearer_legacy_jwt_decode: bool = Field(
+        default=False,
+        description="Legacy Bearer JWT: unverified decode only (skips test-user verification)",
+    )
     
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:8080"
@@ -95,11 +130,6 @@ class Settings(BaseSettings):
         """
         v = (self.is_authentication_required or "Y").strip().upper()
         return v not in ("N", "NO", "0", "FALSE")
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
 
 @lru_cache()

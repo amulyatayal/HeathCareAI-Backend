@@ -478,18 +478,31 @@ def _extract_user_identity(
     
     if authorization and authorization.startswith("Bearer "):
         try:
-            import jwt
+            from config import settings as app_settings
+
             token = authorization.replace("Bearer ", "")
             logger.info(f"Attempting to decode JWT token (len={len(token)})")
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
-            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
-            logger.info(f"Extracted user_id: {user_id}")
-            if user_id:
-                logger.info(f"Authenticated user from JWT: {user_id}")
-                return (user_id, False)
-            else:
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                import jwt
+
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
+                user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+                logger.info(f"Extracted user_id: {user_id}")
+                if user_id:
+                    logger.info(f"Authenticated user from JWT: {user_id}")
+                    return (user_id, False)
                 logger.warning(f"No user_id found in JWT claims: {decoded}")
+            else:
+                from services.patient_jwt import get_patient_token_identity
+
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    user_id, decoded = ident[0], ident[1]
+                    logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
+                    logger.info(f"Authenticated user from JWT: {user_id}")
+                    return (user_id, False)
+                logger.warning("No user_id found or token not accepted")
         except Exception as jwt_error:
             logger.warning(f"Could not decode JWT: {jwt_error}")
     else:
@@ -513,15 +526,27 @@ def _extract_user_id(
     """Extract user ID from request headers (legacy - for logging)."""
     if authorization and authorization.startswith("Bearer "):
         try:
-            import jwt
+            from config import settings as app_settings
+
             token = authorization.replace("Bearer ", "")
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
-            logger.debug(f"Authenticated user from JWT: {user_id}")
-            return user_id or "oauth_user"
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                import jwt
+
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
+                logger.debug(f"Authenticated user from JWT: {user_id}")
+                return user_id or "oauth_user"
+            else:
+                from services.patient_jwt import get_patient_token_identity
+
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    user_id = ident[0]
+                    logger.debug(f"Authenticated user from JWT: {user_id}")
+                    return user_id
         except Exception as jwt_error:
             logger.warning(f"Could not decode JWT: {jwt_error}")
-            return "oauth_user"
+        return "oauth_user"
     elif x_user_id:
         logger.debug(f"Guest user from X-User-ID header: {x_user_id}")
         return x_user_id

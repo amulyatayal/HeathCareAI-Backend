@@ -16,7 +16,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from config.settings import settings
-from config.aws import s3 as get_s3
+from config.aws import get_dynamodb_resource, s3 as get_s3
 from models.document_schemas import PatientDocument
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class DocumentService:
     TABLE_NAME = "PatientDocuments"
 
     def __init__(self):
-        self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.TABLE_NAME)
         self.bucket = settings.s3_bucket_name
         self.prefix = settings.s3_document_prefix

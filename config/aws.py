@@ -118,25 +118,41 @@ _dynamodb_client = None
 _dynamodb_table = None
 
 
+def _optional_boto3_credentials() -> dict:
+    """
+    Credentials from Settings (.env loaded by pydantic-settings) are NOT visible to boto3
+    unless passed explicitly or exported to os.environ. When both are set, pass them so local
+    .env matches Bedrock/S3 behavior in this project.
+    """
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        return {
+            "aws_access_key_id": settings.aws_access_key_id,
+            "aws_secret_access_key": settings.aws_secret_access_key,
+        }
+    return {}
+
+
+def get_dynamodb_resource():
+    """DynamoDB resource using region + optional Settings credentials."""
+    return boto3.resource(
+        "dynamodb",
+        region_name=settings.aws_region,
+        **_optional_boto3_credentials(),
+    )
+
+
 def get_dynamodb_client():
     """Get DynamoDB client"""
     return boto3.client(
-        service_name='dynamodb',
+        service_name="dynamodb",
         region_name=settings.aws_region,
-        #aws_access_key_id=settings.aws_access_key_id,
-        #aws_secret_access_key=settings.aws_secret_access_key
+        **_optional_boto3_credentials(),
     )
 
 
 def get_dynamodb_table(table_name: str = "ChatConversations"):
     """Get DynamoDB table resource"""
-    dynamodb = boto3.resource(
-        'dynamodb',
-        region_name=settings.aws_region,
-        #aws_access_key_id=settings.aws_access_key_id,
-        #aws_secret_access_key=settings.aws_secret_access_key
-    )
-    return dynamodb.Table(table_name)
+    return get_dynamodb_resource().Table(table_name)
 
 
 def dynamodb():

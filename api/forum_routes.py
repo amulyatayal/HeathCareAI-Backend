@@ -14,6 +14,7 @@ from models.forum_schemas import (
     CategoryInfo, ReportRequest, ReportResponse
 )
 from services.forum_service import get_forum_service
+from config import settings as app_settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,25 @@ def _extract_user_id(
     """
     if authorization and authorization.startswith("Bearer "):
         try:
-            import jwt
             token = authorization.replace("Bearer ", "")
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub") or decoded.get("email") or "authenticated_user"
-            display_name = decoded.get("name") or decoded.get("email", "User").split("@")[0]
-            return user_id, display_name
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                import jwt
+
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                user_id = decoded.get("sub") or decoded.get("email") or "authenticated_user"
+                display_name = decoded.get("name") or decoded.get("email", "User").split("@")[0]
+                return user_id, display_name
+            else:
+                from services.patient_jwt import get_patient_token_identity
+
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    sub, decoded = ident
+                    display_name = decoded.get("name") or decoded.get("email", "User").split("@")[0]
+                    return str(sub), str(display_name)
         except Exception:
-            return "authenticated_user", "User"
+            pass
+        return "authenticated_user", "User"
     elif x_user_id:
         # Guest user
         return x_user_id, f"Guest_{x_user_id[-4:]}"

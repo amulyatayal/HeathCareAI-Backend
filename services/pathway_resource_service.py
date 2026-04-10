@@ -14,6 +14,7 @@ from typing import List, Optional
 import boto3
 from botocore.exceptions import ClientError
 
+from config.aws import get_dynamodb_resource
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class PathwayResourceService:
     TABLE_NAME = "PathwayResources"
     
     def __init__(self):
-        self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.TABLE_NAME)
     
     # ================================

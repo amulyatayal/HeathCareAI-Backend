@@ -28,6 +28,7 @@ from api import pipeline_router, health_v2_router, debug_router, profile_router,
 from api import admin_router, resource_router
 # v2 Patient tracking & dashboard
 from api import mood_router, symptom_router, appointment_router, dashboard_router
+from api.test_auth_routes import router as test_auth_router
 
 # ================================
 # Logging Configuration
@@ -173,6 +174,7 @@ app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(categories_router, prefix="/api/v1")
 app.include_router(forum_router, prefix="/api/v1")
+app.include_router(test_auth_router, prefix="/api/v1")
 
 # API v2 routes (new - multi-agent pipeline)
 # Prefix: /api/v2

@@ -53,14 +53,6 @@ class PatientDocument(BaseModel):
         return cls(**item)
 
 
-class DocumentListResponse(BaseModel):
-    documents: List["DocumentMetaResponse"]
-    total_count: int
-    total_size_bytes: int
-    storage_limit_bytes: int
-    max_file_size_bytes: int
-
-
 class DocumentMetaResponse(BaseModel):
     id: str
     name: str
@@ -68,6 +60,14 @@ class DocumentMetaResponse(BaseModel):
     date: str
     size: str
     size_bytes: int
+
+
+class DocumentListResponse(BaseModel):
+    documents: List[DocumentMetaResponse]
+    total_count: int
+    total_size_bytes: int
+    storage_limit_bytes: int
+    max_file_size_bytes: int
 
 
 class UploadDocumentResponse(BaseModel):

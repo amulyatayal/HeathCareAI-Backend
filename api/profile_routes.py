@@ -28,7 +28,7 @@ from models.patient_stages import (
 )
 from services.patient_profile_service import get_patient_profile_service
 from services.patient_stage_service import get_patient_stage_service
-from api.auth import get_authenticated_user_id, get_user_id_allowing_guest
+from api.auth import get_authenticated_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -231,18 +231,21 @@ async def get_stage_details(stage_id: str):
 @router.put("/stage/select", response_model=dict)
 async def select_treatment_stage(
     data: StageSelectionRequest,
-    user_id: str = Depends(get_user_id_allowing_guest)
+    user_id: str = Depends(get_authenticated_user_id)
 ):
     """
     Select a treatment stage for personalized responses.
-    
-    Updates the user's profile with the selected stage.
-    Stage will be used to personalize AI responses.
+
+    Requires a real session (e.g. Google or verified test-user JWT). Guest / X-User-ID
+    identities are not accepted; pathway data is not written for guests.
+
+    Persists the hierarchical stage on the patient profile via update_stage_detailed
+    (which get-or-creates the DynamoDB row for that authenticated user).
     """
     logger.info(f"User {user_id} selecting stage: {data.stage_id}")
     
     try:
-        # Validate stage exists
+        # Validate stage exists in hierarchy
         stage_service = get_patient_stage_service()
         stage = stage_service.get_stage_by_id(data.stage_id)
         
@@ -252,13 +255,7 @@ async def select_treatment_stage(
                 detail=f"Invalid stage ID: {data.stage_id}"
             )
         
-        # Update user profile with selected stage
         profile_service = get_patient_profile_service()
-        
-        # Get or create profile (handles both OAuth and guest users)
-        profile = await profile_service.get_or_create_profile(user_id)
-        
-        # Update the detailed stage using existing service method
         await profile_service.update_stage_detailed(user_id, data.stage_id)
         
         # Get breadcrumb for response
@@ -289,7 +286,8 @@ async def get_my_stage(
 ):
     """
     Get the current user's selected treatment stage with full context.
-    
+
+    Same authentication as PUT /profile/stage/select (no guest / X-User-ID only).
     Returns stage details, breadcrumb, and AI context.
     """
     profile_service = get_patient_profile_service()

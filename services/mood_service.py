@@ -12,6 +12,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from config.aws import get_dynamodb_resource
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class MoodService:
     TABLE_NAME = "MoodEntries"
 
     def __init__(self):
-        self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.TABLE_NAME)
 
     async def create_entry(self, user_id: str, data: dict) -> dict:
