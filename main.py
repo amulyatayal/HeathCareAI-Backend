@@ -35,6 +35,7 @@ from api import (
 from api import admin_router, resource_router
 # v2 Patient tracking & dashboard
 from api import (
+    patient_biomarkers_router,
     mood_router,
     symptom_router,
     appointment_router,
@@ -204,6 +205,7 @@ app.include_router(admin_router, prefix="/api/v2/admin")
 app.include_router(resource_router, prefix="/api/v2")
 
 # Patient tracking & dashboard
+app.include_router(patient_biomarkers_router, prefix="/api/v2")
 app.include_router(mood_router, prefix="/api/v2")
 app.include_router(symptom_router, prefix="/api/v2")
 app.include_router(appointment_router, prefix="/api/v2")

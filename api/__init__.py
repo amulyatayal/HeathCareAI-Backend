@@ -32,6 +32,7 @@ from .resource_routes import router as resource_router
 # ================================
 # v2 Patient Tracking & Dashboard
 # ================================
+from .patient_biomarkers_routes import router as patient_biomarkers_router
 from .mood_routes import router as mood_router
 from .symptom_routes import router as symptom_router
 from .appointment_routes import router as appointment_router
@@ -59,6 +60,7 @@ __all__ = [
     'admin_router',
     'resource_router',
     # v2 patient tracking & dashboard
+    'patient_biomarkers_router',
     'mood_router',
     'symptom_router',
     'appointment_router',

@@ -27,6 +27,14 @@ def build_retrieval_query(context: PipelineContext) -> str:
             extras.append(f"Patient weight: {float(ud['weight']):.1f} kg")
         except (TypeError, ValueError):
             extras.append(f"Patient weight: {ud['weight']} kg")
+    if ud.get("height_cm") is not None:
+        extras.append(f"Patient height: {ud['height_cm']} cm")
+    if ud.get("bmi") is not None:
+        extras.append(f"Patient BMI: {ud['bmi']}")
+    if ud.get("waist_circumference_cm") is not None:
+        extras.append(f"Waist circumference: {ud['waist_circumference_cm']} cm")
+    if ud.get("hand_grip_strength_kg") is not None:
+        extras.append(f"Hand grip strength: {ud['hand_grip_strength_kg']} kg")
 
     if not extras:
         return base

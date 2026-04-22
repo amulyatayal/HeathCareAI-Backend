@@ -115,30 +115,54 @@ class StageAgentV2(BaseAgent):
             )
 
     async def _load_user_data_from_db(self, context: PipelineContext) -> Dict[str, Any]:
-        """Load mandatory fields from PatientProfiles (DynamoDB) when available."""
+        """
+        Load user data from PatientProfiles and PatientBioMarkers (DynamoDB).
+
+        From profile: weight (mandatory pipeline field).
+        From biomarkers: latest measurements (height, weight, BMI, waist, grip strength).
+        """
         if context.metadata.get("is_guest", True):
             return {}
         uid = context.user_id
         if not uid:
             return {}
 
+        out: Dict[str, Any] = {}
+
+        # --- Patient Profile ---
         try:
             from services.patient_profile_service import get_patient_profile_service
 
             profile = await get_patient_profile_service().get_profile(uid)
-            if not profile or not profile.explicit_data:
-                return {}
+            if profile and profile.explicit_data:
+                ed = profile.explicit_data
 
-            out: Dict[str, Any] = {}
-            w = profile.explicit_data.weight_kg
-            if w is not None:
-                rules = FIELD_DEFINITIONS.get("weight", {})
-                if self._is_valid_field_value("weight", w, rules):
-                    out["weight"] = float(w)
-            return out
+                if ed.weight_kg is not None:
+                    rules = FIELD_DEFINITIONS.get("weight", {})
+                    if self._is_valid_field_value("weight", ed.weight_kg, rules):
+                        out["weight"] = float(ed.weight_kg)
         except Exception as e:
-            logger.warning(f"Failed to load user data from DB: {e}")
-            return {}
+            logger.warning(f"Failed to load profile data from DB: {e}")
+
+        # --- Patient Biomarkers (latest dynamic measurements) ---
+        try:
+            from services.patient_biomarkers_service import get_patient_biomarkers_service
+
+            biomarker_result = await get_patient_biomarkers_service().list_entries(uid, limit=1)
+            entries = biomarker_result.get("entries", [])
+            if entries:
+                latest = entries[0]
+                for field in [
+                    "height_cm", "weight_kg", "bmi",
+                    "waist_circumference_cm", "hand_grip_strength_kg",
+                ]:
+                    val = latest.get(field)
+                    if val is not None:
+                        out[field] = val
+        except Exception as e:
+            logger.warning(f"Failed to load biomarker data from DB: {e}")
+
+        return out
 
     async def _persist_mandatory_fields_to_db(self, user_id: str, extracted: Dict[str, Any]) -> None:
         """Save chat-derived mandatory fields to DynamoDB."""
@@ -330,8 +354,13 @@ class StageAgentV2(BaseAgent):
         parts: List[str] = []
         if context.metadata and context.metadata.get("user_data"):
             ud = context.metadata["user_data"]
-            w = ud.get("weight")
-            parts.append(f"user_data(weight={w})")
+            summary_fields = []
+            for key in ["weight", "height_cm", "bmi",
+                        "waist_circumference_cm", "hand_grip_strength_kg"]:
+                if ud.get(key) is not None:
+                    summary_fields.append(f"{key}={ud[key]}")
+            if summary_fields:
+                parts.append(f"user_data({', '.join(summary_fields)})")
         if context.stage_result:
             parts.append(f"stage={context.stage_result.stage}")
         return ", ".join(parts) if parts else None
