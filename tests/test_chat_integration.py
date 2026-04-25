@@ -15,7 +15,6 @@ Usage:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -23,7 +22,8 @@ from httpx import AsyncClient, ASGITransport
 
 from main import app
 from config.pipeline_config import PatientStage
-from models.patient_profile import PatientProfile, PatientExplicitData
+from models.patient_profile import PatientProfile
+from services.patient_biomarkers_service import PatientBiomarkersService
 from services.patient_profile_service import PatientProfileService
 
 logger = logging.getLogger(__name__)
@@ -47,12 +47,10 @@ def _make_settings_mock(user_id: str = TEST_USER_ID) -> MagicMock:
 def _build_profile(
     user_id: str = TEST_USER_ID,
     stage: PatientStage = PatientStage.ACTIVE_TREATMENT,
-    weight_kg: Optional[float] = 65.0,
     onboarding_completed: bool = True,
 ) -> PatientProfile:
     """Build a PatientProfile for seeding into DynamoDB."""
     now = datetime.utcnow()
-    explicit = PatientExplicitData(weight_kg=weight_kg) if weight_kg else None
     return PatientProfile(
         user_id=user_id,
         created_at=now,
@@ -60,7 +58,6 @@ def _build_profile(
         current_stage=stage,
         onboarding_completed=onboarding_completed,
         onboarding_completed_at=now if onboarding_completed else None,
-        explicit_data=explicit,
     )
 
 
@@ -79,6 +76,31 @@ async def delete_profile(user_id: str) -> None:
         logger.info(f"Deleted test profile: user_id={user_id}")
     except Exception as e:
         logger.warning(f"Cleanup failed for {user_id}: {e}")
+
+
+async def delete_biomarkers(user_id: str) -> None:
+    """Remove all biomarker rows for a user (including LATEST pointer)."""
+    svc = PatientBiomarkersService()
+    try:
+        from boto3.dynamodb.conditions import Key
+
+        response = svc.table.query(
+            KeyConditionExpression=Key("user_id").eq(user_id),
+            ScanIndexForward=False,
+        )
+        items = response.get("Items", [])
+        for item in items:
+            ts = item.get("timestamp")
+            if ts:
+                svc.table.delete_item(Key={"user_id": user_id, "timestamp": ts})
+    except Exception as e:
+        logger.warning(f"Biomarker cleanup failed for {user_id}: {e}")
+
+
+async def seed_biomarkers(user_id: str, **kwargs: float) -> None:
+    """Create a biomarker snapshot with provided fields."""
+    svc = PatientBiomarkersService()
+    await svc.create_entry(user_id=user_id, data=kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +125,28 @@ def settings_patch():
 async def seeded_profile():
     """Seed a default test profile before a test and clean up after."""
     profile = _build_profile()
+    await delete_biomarkers(profile.user_id)
     await seed_profile(profile)
+    await seed_biomarkers(
+        profile.user_id,
+        weight_kg=65.0,
+        height_cm=165.0,
+        waist_circumference_cm=82.0,
+    )
     yield profile
+    await delete_biomarkers(profile.user_id)
+    await delete_profile(profile.user_id)
+
+
+@pytest.fixture()
+async def seeded_profile_with_weight():
+    """Seed profile + biomarker weight and clean up profile after test."""
+    profile = _build_profile()
+    await delete_biomarkers(profile.user_id)
+    await seed_profile(profile)
+    await seed_biomarkers(profile.user_id, weight_kg=65.0)
+    yield profile
+    await delete_biomarkers(profile.user_id)
     await delete_profile(profile.user_id)
 
 
@@ -215,19 +257,19 @@ class TestChatIntegration:
         assert len(data["trace"]) > 0
 
     @pytest.mark.asyncio
-    async def test_weight_followup_maintains_context(self, client, seeded_profile):
+    async def test_weight_followup_maintains_context(self, client, seeded_profile_with_weight):
         """
-        Simulates: user asks nutrition question → bot asks for weight → user
-        replies with weight. The pipeline should restore the original question.
+        Simulates: user asks nutrition question → bot confirms known weight → user
+        replies with updated weight. The pipeline should restore the original
+        question and persist updated weight in biomarkers.
         """
         history = [
             {"role": "user", "content": "What should I eat during chemo?"},
             {
                 "role": "assistant",
                 "content": (
-                    "To personalize your recommendations, "
-                    "I need the following information:\n"
-                    "- What is your current weight in kg?"
+                    "I have your current weight as 65.0 kg. "
+                    "Has this changed? If yes, please share your updated weight in kg."
                 ),
             },
         ]
@@ -242,3 +284,63 @@ class TestChatIntegration:
         data = resp.json()
         assert data["intent"] == "nutrition"
         assert len(data["response"]) > 0
+
+        biomarker_svc = PatientBiomarkersService()
+        latest = await biomarker_svc.list_entries(TEST_USER_ID, limit=1)
+        assert latest["total_count"] > 0
+        assert latest["entries"][0]["weight_kg"] == pytest.approx(70.0)
+
+    @pytest.mark.asyncio
+    async def test_after_weight_update_agent_asks_for_height(self, client, seeded_profile_with_weight):
+        """
+        If only weight is available, user providing a new weight should trigger
+        a follow-up prompt for height.
+        """
+        history = [
+            {"role": "user", "content": "What should I eat during chemo?"},
+            {
+                "role": "assistant",
+                "content": (
+                    "I have your current weight as 65.0 kg. "
+                    "Has this changed? If yes, please share your updated weight in kg."
+                ),
+            },
+        ]
+        resp = await client.post(
+            CHAT_URL,
+            json={
+                "message": "70 kg",
+                "conversation_history": history,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "height in cm" in data["response"].lower()
+
+    @pytest.mark.asyncio
+    async def test_after_height_update_agent_asks_for_waist(self, client, seeded_profile_with_weight):
+        """
+        If only weight and height are available, after height update the next
+        required follow-up should ask for waist circumference.
+        """
+        await seed_biomarkers(TEST_USER_ID, height_cm=165.0)
+        history = [
+            {"role": "user", "content": "What should I eat during chemo?"},
+            {
+                "role": "assistant",
+                "content": (
+                    "I have your current height as 165.0 cm. "
+                    "Has this changed? If yes, please share your updated height in cm."
+                ),
+            },
+        ]
+        resp = await client.post(
+            CHAT_URL,
+            json={
+                "message": "166 cm",
+                "conversation_history": history,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "waist circumference" in data["response"].lower()

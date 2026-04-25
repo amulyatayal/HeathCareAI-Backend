@@ -25,8 +25,27 @@ FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "min_value": 20.0,
         "max_value": 400.0,
     },
-    # Add more fields here as you support extraction + DB columns, e.g.:
-    # "height_cm": { "label": "Height", "unit": "cm", "prompt": "...", "min_value": 50, "max_value": 250 },
+    "height_cm": {
+        "label": "Height",
+        "unit": "cm",
+        "prompt": "What is your current height in cm? (for example: 165 cm)",
+        "min_value": 50.0,
+        "max_value": 250.0,
+    },
+    "waist_circumference_cm": {
+        "label": "Waist circumference",
+        "unit": "cm",
+        "prompt": "What is your waist circumference in cm? (for example: 82 cm)",
+        "min_value": 30.0,
+        "max_value": 250.0,
+    },
+    "hand_grip_strength_kg": {
+        "label": "Hand grip strength",
+        "unit": "kg",
+        "prompt": "What is your hand grip strength in kg? (for example: 22 kg)",
+        "min_value": 0.0,
+        "max_value": 150.0,
+    },
 }
 
 # Intent (string value from IntentCategory) → list of mandatory FIELD keys for that intent.

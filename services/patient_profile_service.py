@@ -120,22 +120,17 @@ class PatientProfileService:
         fields: Dict[str, Any],
     ) -> PatientProfile:
         """
-        Merge user-provided mandatory pipeline fields into explicit_data (e.g. weight_kg).
+        Merge user-provided mandatory pipeline fields into explicit_data.
 
         Used when the user supplies values in chat that should persist in DynamoDB.
-        Keys in `fields` use pipeline names (e.g. 'weight'); they are mapped to explicit_data.
+        Note: weight is intentionally not stored in PatientProfile; it is stored in
+        biomarker snapshots only.
         """
         profile = await self.get_or_create_profile(user_id)
         now = datetime.utcnow()
 
         if profile.explicit_data is None:
             profile.explicit_data = PatientExplicitData()
-
-        if "weight" in fields and fields["weight"] is not None:
-            try:
-                profile.explicit_data.weight_kg = float(fields["weight"])
-            except (TypeError, ValueError):
-                logger.warning(f"Invalid weight value for {user_id}: {fields.get('weight')}")
 
         profile.updated_at = now
 

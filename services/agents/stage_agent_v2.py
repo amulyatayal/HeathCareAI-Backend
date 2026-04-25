@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from services.agents.base_agent import BaseAgent
@@ -11,7 +12,12 @@ from config.user_data_config import (
     FIELD_DEFINITIONS,
     get_mandatory_field_rules_for_intent,
 )
-from services.mandatory_followup_context import parse_weight_kg as parse_weight_kg_shared
+from services.mandatory_followup_context import (
+    parse_weight_kg as parse_weight_kg_shared,
+    parse_height_cm as parse_height_cm_shared,
+    parse_waist_circumference_cm as parse_waist_circumference_cm_shared,
+    parse_hand_grip_strength_kg as parse_hand_grip_strength_kg_shared,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +58,7 @@ class StageAgentV2(BaseAgent):
         """
         Merge mandatory fields from (in order of increasing precedence):
         1) Nutrition JSON file (demo / fallback)
-        2) DynamoDB patient profile (explicit_data), when signed-in
+        2) DynamoDB biomarker table (latest snapshot), when signed-in
         3) Current user message (parsed)
 
         If still missing after merge → should_abort + ask user.
@@ -106,6 +112,77 @@ class StageAgentV2(BaseAgent):
         if to_persist and not context.metadata.get("is_guest", True) and context.user_id:
             await self._persist_mandatory_fields_to_db(context.user_id, to_persist)
 
+        # Confirm existing mandatory measurements unless user already provided an update
+        # this turn or explicitly said it has not changed.
+        weight_is_mandatory = "weight" in mandatory_rules
+        current_weight = merged_user_data.get("weight")
+        has_valid_current_weight = self._is_valid_field_value(
+            "weight",
+            current_weight,
+            FIELD_DEFINITIONS.get("weight", {}),
+        )
+        provided_weight_this_turn = "weight" in to_persist
+        said_no_change = self._is_no_change_weight_reply(extraction_text)
+        if (
+            weight_is_mandatory
+            and has_valid_current_weight
+            and not provided_weight_this_turn
+            and not said_no_change
+        ):
+            context.should_abort = True
+            context.abort_reason = "user_data_missing"
+            context.metadata["user_data_missing_fields"] = ["weight"]
+            context.metadata["user_data_clarification_message"] = self._build_weight_confirmation_prompt(
+                float(current_weight)
+            )
+            return
+
+        height_is_mandatory = "height_cm" in mandatory_rules
+        current_height = merged_user_data.get("height_cm")
+        has_valid_current_height = self._is_valid_field_value(
+            "height_cm",
+            current_height,
+            FIELD_DEFINITIONS.get("height_cm", {}),
+        )
+        provided_height_this_turn = "height_cm" in to_persist
+        said_no_height_change = self._is_no_change_height_reply(extraction_text)
+        if (
+            height_is_mandatory
+            and has_valid_current_height
+            and not provided_height_this_turn
+            and not said_no_height_change
+        ):
+            context.should_abort = True
+            context.abort_reason = "user_data_missing"
+            context.metadata["user_data_missing_fields"] = ["height_cm"]
+            context.metadata["user_data_clarification_message"] = self._build_height_confirmation_prompt(
+                float(current_height)
+            )
+            return
+
+        waist_is_mandatory = "waist_circumference_cm" in mandatory_rules
+        current_waist = merged_user_data.get("waist_circumference_cm")
+        has_valid_current_waist = self._is_valid_field_value(
+            "waist_circumference_cm",
+            current_waist,
+            FIELD_DEFINITIONS.get("waist_circumference_cm", {}),
+        )
+        provided_waist_this_turn = "waist_circumference_cm" in to_persist
+        said_no_waist_change = self._is_no_change_waist_reply(extraction_text)
+        if (
+            waist_is_mandatory
+            and has_valid_current_waist
+            and not provided_waist_this_turn
+            and not said_no_waist_change
+        ):
+            context.should_abort = True
+            context.abort_reason = "user_data_missing"
+            context.metadata["user_data_missing_fields"] = ["waist_circumference_cm"]
+            context.metadata["user_data_clarification_message"] = (
+                self._build_waist_confirmation_prompt(float(current_waist))
+            )
+            return
+
         if missing_fields:
             context.should_abort = True
             context.abort_reason = "user_data_missing"
@@ -116,9 +193,8 @@ class StageAgentV2(BaseAgent):
 
     async def _load_user_data_from_db(self, context: PipelineContext) -> Dict[str, Any]:
         """
-        Load user data from PatientProfiles and PatientBioMarkers (DynamoDB).
+        Load user data from PatientBioMarkers (DynamoDB).
 
-        From profile: weight (mandatory pipeline field).
         From biomarkers: latest measurements (height, weight, BMI, waist, grip strength).
         """
         if context.metadata.get("is_guest", True):
@@ -129,29 +205,12 @@ class StageAgentV2(BaseAgent):
 
         out: Dict[str, Any] = {}
 
-        # --- Patient Profile ---
-        try:
-            from services.patient_profile_service import get_patient_profile_service
-
-            profile = await get_patient_profile_service().get_profile(uid)
-            if profile and profile.explicit_data:
-                ed = profile.explicit_data
-
-                if ed.weight_kg is not None:
-                    rules = FIELD_DEFINITIONS.get("weight", {})
-                    if self._is_valid_field_value("weight", ed.weight_kg, rules):
-                        out["weight"] = float(ed.weight_kg)
-        except Exception as e:
-            logger.warning(f"Failed to load profile data from DB: {e}")
-
         # --- Patient Biomarkers (latest dynamic measurements) ---
         try:
             from services.patient_biomarkers_service import get_patient_biomarkers_service
 
-            biomarker_result = await get_patient_biomarkers_service().list_entries(uid, limit=1)
-            entries = biomarker_result.get("entries", [])
-            if entries:
-                latest = entries[0]
+            latest = await get_patient_biomarkers_service().get_latest_entry(uid)
+            if latest:
                 for field in [
                     "height_cm", "weight_kg", "bmi",
                     "waist_circumference_cm", "hand_grip_strength_kg",
@@ -159,6 +218,9 @@ class StageAgentV2(BaseAgent):
                     val = latest.get(field)
                     if val is not None:
                         out[field] = val
+                        if field == "weight_kg":
+                            # Keep pipeline key aligned with mandatory field key.
+                            out["weight"] = val
         except Exception as e:
             logger.warning(f"Failed to load biomarker data from DB: {e}")
 
@@ -169,9 +231,21 @@ class StageAgentV2(BaseAgent):
         if not extracted:
             return
         try:
-            from services.patient_profile_service import get_patient_profile_service
+            # Weight is persisted only as biomarker data, not in PatientProfile.
+            from services.patient_biomarkers_service import get_patient_biomarkers_service
 
-            await get_patient_profile_service().upsert_explicit_mandatory_fields(user_id, extracted)
+            payload: Dict[str, Any] = {}
+            if extracted.get("weight") is not None:
+                payload["weight_kg"] = extracted["weight"]
+            if extracted.get("height_cm") is not None:
+                payload["height_cm"] = extracted["height_cm"]
+            if extracted.get("waist_circumference_cm") is not None:
+                payload["waist_circumference_cm"] = extracted["waist_circumference_cm"]
+            if extracted.get("hand_grip_strength_kg") is not None:
+                payload["hand_grip_strength_kg"] = extracted["hand_grip_strength_kg"]
+
+            if payload:
+                await get_patient_biomarkers_service().create_entry(user_id, payload)
         except Exception as e:
             logger.warning(f"Failed to persist mandatory fields for user {user_id}: {e}")
 
@@ -227,10 +301,28 @@ class StageAgentV2(BaseAgent):
         weight_kg = self._parse_weight_kg(message)
         if weight_kg is not None:
             out["weight"] = weight_kg
+        height_cm = self._parse_height_cm(message)
+        if height_cm is not None:
+            out["height_cm"] = height_cm
+        waist_cm = self._parse_waist_circumference_cm(message)
+        if waist_cm is not None:
+            out["waist_circumference_cm"] = waist_cm
+        hand_grip_kg = self._parse_hand_grip_strength_kg(message)
+        if hand_grip_kg is not None:
+            out["hand_grip_strength_kg"] = hand_grip_kg
         return out
 
     def _parse_weight_kg(self, message: str) -> Optional[float]:
         return parse_weight_kg_shared(message)
+
+    def _parse_height_cm(self, message: str) -> Optional[float]:
+        return parse_height_cm_shared(message)
+
+    def _parse_waist_circumference_cm(self, message: str) -> Optional[float]:
+        return parse_waist_circumference_cm_shared(message)
+
+    def _parse_hand_grip_strength_kg(self, message: str) -> Optional[float]:
+        return parse_hand_grip_strength_kg_shared(message)
 
     def _is_valid_field_value(self, field_key: str, value: Any, rules: Dict[str, Any]) -> bool:
         if value is None:
@@ -265,6 +357,42 @@ class StageAgentV2(BaseAgent):
         return "To personalize your recommendations, I need the following information:\n" + "\n".join(
             f"- {p}" for p in prompts
         )
+
+    def _build_weight_confirmation_prompt(self, current_weight: float) -> str:
+        return (
+            f"I have your current weight as {current_weight:.1f} kg. "
+            "Has this changed? If yes, please share your updated weight in kg."
+        )
+
+    def _build_height_confirmation_prompt(self, current_height_cm: float) -> str:
+        return (
+            f"I have your current height as {current_height_cm:.1f} cm. "
+            "Has this changed? If yes, please share your updated height in cm."
+        )
+
+    def _build_waist_confirmation_prompt(self, current_waist_cm: float) -> str:
+        return (
+            f"I have your waist circumference as {current_waist_cm:.1f} cm. "
+            "Has this changed? If yes, please share your updated waist circumference in cm."
+        )
+
+    def _is_no_change_weight_reply(self, message: str) -> bool:
+        text = (message or "").strip().lower()
+        if not text:
+            return False
+        patterns = [
+            r"^(no|nope|nah)$",
+            r"^(no change|unchanged|same)$",
+            r"^(it('| i)?s the same|still the same)$",
+            r"^(no changes)$",
+        ]
+        return any(re.match(p, text) for p in patterns)
+
+    def _is_no_change_height_reply(self, message: str) -> bool:
+        return self._is_no_change_weight_reply(message)
+
+    def _is_no_change_waist_reply(self, message: str) -> bool:
+        return self._is_no_change_weight_reply(message)
 
     async def execute(self, context: PipelineContext) -> PipelineContext:
         """
