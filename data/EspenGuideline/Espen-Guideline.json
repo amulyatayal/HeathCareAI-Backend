@@ -1,0 +1,76 @@
+{
+  "document_info": {
+    "title": "ESPEN guidelines on nutrition in cancer patients",
+    "journal": "Clinical Nutrition",
+    "publication_year": 2017,
+    "volume": 36,
+    "pages": "11-48",
+    "doi": "10.1016/j.clnu.2016.07.015"
+  },
+  "summary_of_recommendations": [
+    {
+      "id": "R1",
+      "topic": "Screening",
+      "recommendation": "All cancer patients should be screened regularly for the risk or the presence of malnutrition[cite: 20, 630].",
+      "strength": "Strong consensus"
+    },
+    {
+      "id": "R2",
+      "topic": "Intervention Step-wise Approach",
+      "recommendation": "Energy and substrate requirements should be met by offering nutritional interventions in a step-wise manner from counseling to parenteral nutrition, except in end-of-life care[cite: 21, 631].",
+      "strength": "General guideline"
+    },
+    {
+      "id": "R3",
+      "topic": "Exercise",
+      "recommendation": "Nutritional care should always be accompanied by exercise training[cite: 23, 633].",
+      "strength": "General guideline"
+    },
+    {
+      "id": "R4",
+      "topic": "Protein Intake",
+      "recommendation": "In subjects with normal kidney function, protein intake up to and above 2 g/kg/d is considered safe[cite: 134].",
+      "targets": {
+        "normal_kidney_function": "> 2 g/kg/d",
+        "acute_renal_failure": "1.0 g/kg/d",
+        "chronic_renal_failure": "1.2 g/kg/d"
+      }
+    },
+    {
+      "id": "R5",
+      "topic": "Advanced Cancer Care",
+      "recommendation": "Nutritional interventions should only be implemented after considering prognosis, expected benefit on quality of life, and the burden associated with care[cite: 207].",
+      "strength": "Strong"
+    }
+  ],
+  "pico_clinical_questions": {
+    "total_questions_listed": 69,
+    "categories": [
+      "Surgery",
+      "Radiotherapy",
+      "Curative/Palliative Chemotherapy",
+      "Hematology",
+      "Advanced Cancer"
+    ],
+    "sample_targets": [
+      {
+        "index": 14,
+        "subgroup": "Curative RT",
+        "intervention": "Tube feeding vs oral food",
+        "outcome": "All [cite: 885]"
+      },
+      {
+        "index": 31,
+        "subgroup": "Curative CHT",
+        "intervention": "Muscle training",
+        "outcome": "All [cite: 885]"
+      }
+    ]
+  },
+  "consensus_data": {
+    "total_recommendations": 44,
+    "strong_consensus_count": 24,
+    "consensus_count": 20,
+    "minimum_agreement_percentage": 75
+  }
+}
