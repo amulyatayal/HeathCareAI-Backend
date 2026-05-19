@@ -18,6 +18,7 @@ from services.mandatory_followup_context import (
     parse_waist_circumference_cm as parse_waist_circumference_cm_shared,
     parse_hand_grip_strength_kg as parse_hand_grip_strength_kg_shared,
 )
+from services.clinical_categorizer import categorize_patient
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +88,19 @@ class StageAgentV2(BaseAgent):
         ).strip()
         extracted_user_data = self._extract_user_data_from_message(extraction_text)
 
-        # JSON < DB < message (last wins)
+        # Caller-supplied data: anything already in context.metadata["user_data"]
+        # before this agent runs (e.g. tests that hand-feed a patient record, or
+        # future upstream agents that pre-populate from a profile cache).
+        caller_user_data = context.metadata.get("user_data") or {}
+        if not isinstance(caller_user_data, dict):
+            caller_user_data = {}
+
+        # Merge order is increasing precedence: JSON < DB < message < caller-supplied.
         merged_user_data: Dict[str, Any] = {
             **json_user_data,
             **db_user_data,
             **extracted_user_data,
+            **caller_user_data,
         }
 
         missing_fields: List[str] = []
@@ -102,6 +111,46 @@ class StageAgentV2(BaseAgent):
 
         context.metadata["user_data"] = merged_user_data
 
+        # Derive BMI on the fly if we have weight + height but no BMI value
+        # yet. Production user_data may use either ``weight`` (onboarding) or
+        # ``weight_kg`` (PatientBioMarkers); height is consistently stored as
+        # ``height_cm``.
+        if "bmi" not in merged_user_data:
+            weight = (
+                merged_user_data.get("weight")
+                or merged_user_data.get("weight_kg")
+            )
+            height_cm = merged_user_data.get("height_cm")
+            try:
+                if weight and height_cm:
+                    height_m = float(height_cm) / 100.0
+                    if height_m > 0:
+                        merged_user_data["bmi"] = round(
+                            float(weight) / (height_m * height_m), 1
+                        )
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "BMI derivation failed (weight=%r, height_cm=%r): %s",
+                    weight, height_cm, exc,
+                )
+
+        # Bucket every measurement we have thresholds configured for
+        # (BMI, waist, grip strength, PG-SGA, ...). Categorization is
+        # advisory: failures must never break the pipeline. Downstream
+        # agents (RetrievalQueryBuilder, ReasoningAgent) read the result
+        # from ``metadata['clinical_categories']``.
+        try:
+            categories = categorize_patient(merged_user_data)
+            if categories:
+                context.metadata["clinical_categories"] = categories
+                logger.info(
+                    "Computed %d clinical categories: %s",
+                    len(categories),
+                    {m: c["label"] for m, c in categories.items()},
+                )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("clinical categorization failed: %s", exc)
+
         # Persist only validated values the user explicitly typed this turn (signed-in users)
         to_persist: Dict[str, Any] = {}
         for key, val in extracted_user_data.items():
@@ -111,6 +160,15 @@ class StageAgentV2(BaseAgent):
                 to_persist[key] = val
         if to_persist and not context.metadata.get("is_guest", True) and context.user_id:
             await self._persist_mandatory_fields_to_db(context.user_id, to_persist)
+
+        # Per-field "has it changed?" confirmations. Callers (tests, batch
+        # jobs, agent-to-agent flows) that hand-feed validated user_data can
+        # set ``metadata["skip_user_data_confirmations"] = True`` to bypass
+        # this interactive prompting. The downstream missing-field abort
+        # still runs — only the "confirm existing value" prompts are skipped.
+        skip_user_data_confirmations = bool(
+            context.metadata.get("skip_user_data_confirmations")
+        )
 
         # Confirm existing mandatory measurements unless user already provided an update
         # this turn or explicitly said it has not changed.
@@ -124,7 +182,8 @@ class StageAgentV2(BaseAgent):
         provided_weight_this_turn = "weight" in to_persist
         said_no_change = self._is_no_change_weight_reply(extraction_text)
         if (
-            weight_is_mandatory
+            not skip_user_data_confirmations
+            and weight_is_mandatory
             and has_valid_current_weight
             and not provided_weight_this_turn
             and not said_no_change
@@ -147,7 +206,8 @@ class StageAgentV2(BaseAgent):
         provided_height_this_turn = "height_cm" in to_persist
         said_no_height_change = self._is_no_change_height_reply(extraction_text)
         if (
-            height_is_mandatory
+            not skip_user_data_confirmations
+            and height_is_mandatory
             and has_valid_current_height
             and not provided_height_this_turn
             and not said_no_height_change
@@ -170,7 +230,8 @@ class StageAgentV2(BaseAgent):
         provided_waist_this_turn = "waist_circumference_cm" in to_persist
         said_no_waist_change = self._is_no_change_waist_reply(extraction_text)
         if (
-            waist_is_mandatory
+            not skip_user_data_confirmations
+            and waist_is_mandatory
             and has_valid_current_waist
             and not provided_waist_this_turn
             and not said_no_waist_change
