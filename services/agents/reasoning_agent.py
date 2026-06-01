@@ -515,7 +515,7 @@ class ReasoningAgent(BaseAgent):
     # complex patients (severe malnutrition + refeeding gate + cachexia
     # + Stage IV palliative + many nutrition-impact symptoms) routinely
     # takes 60–120 s on Bedrock. Other intents are short-form and finish
-    # well under 30 s. We pick the timeout per intent so we don't punish
+    # well under 30 s. We pick the timeout per intent so we don't punish``
     # short responses with a 3-minute ceiling but also don't time out the
     # heaviest meal-plan calls.
     _DEFAULT_TIMEOUT_MS = 30000
