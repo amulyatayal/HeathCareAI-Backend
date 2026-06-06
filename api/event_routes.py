@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.auth import get_authenticated_user_id
 from api.compliance_dependencies import require_active_community_consent
-from api.event_id_validation import require_valid_event_id
 from models.event_schemas import (
     EventDetailResponse,
     EventMutationResponse,
@@ -28,8 +27,6 @@ from services.patient_profile_service import get_patient_profile_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Community Events"])
-
-_PATIENT_EVENTS_LIST = "GET /api/v2/events"
 
 
 async def _profile_clinician_id(user_id: str) -> Optional[str]:
@@ -73,7 +70,6 @@ async def get_event(
     user_id: str = Depends(get_authenticated_user_id),
 ):
     """Single event detail with RSVP flag."""
-    event_id = require_valid_event_id(event_id, list_endpoint=_PATIENT_EVENTS_LIST)
     clinician_id = await _profile_clinician_id(user_id)
     svc = get_patient_events_service()
     event = svc.get_event(user_id, clinician_id, event_id)
@@ -88,7 +84,6 @@ async def rsvp_to_event(
     user_id: str = Depends(require_active_community_consent),
 ):
     """RSVP to an upcoming published event (idempotent)."""
-    event_id = require_valid_event_id(event_id, list_endpoint=_PATIENT_EVENTS_LIST)
     clinician_id = await _profile_clinician_id(user_id)
     admin_svc = get_admin_events_service()
     raw = admin_svc.get_event_raw(event_id)
@@ -114,7 +109,6 @@ async def cancel_rsvp(
     user_id: str = Depends(require_active_community_consent),
 ):
     """Remove RSVP (idempotent)."""
-    event_id = require_valid_event_id(event_id, list_endpoint=_PATIENT_EVENTS_LIST)
     clinician_id = await _profile_clinician_id(user_id)
     svc = get_patient_events_service()
     event = svc.cancel_rsvp(user_id, event_id, clinician_id)
