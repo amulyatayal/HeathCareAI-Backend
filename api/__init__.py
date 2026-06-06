@@ -40,6 +40,7 @@ from .notification_routes import router as notification_router
 from .patient_consent_routes import router as patient_consent_router
 from .patient_grievance_routes import router as patient_grievance_router
 from .patient_share_routes import router as patient_share_router
+from .event_routes import router as event_router
 
 __all__ = [
     # v1 (deprecated)
@@ -66,4 +67,5 @@ __all__ = [
     'patient_consent_router',
     'patient_grievance_router',
     'patient_share_router',
+    'event_router',
 ]

@@ -172,6 +172,14 @@ class PatientConsentService:
 
         return {"data_consent": data_consent, "cookie_consent": cookie_consent}
 
+    def has_active_community_consent(self, user_id: str) -> bool:
+        """True when active data consent exists with choices.community enabled."""
+        row = self._get_row(user_id, CONSENT_DATA)
+        if not row or not self._is_active(row):
+            return False
+        choices = row.get("choices") or {}
+        return bool(choices.get("community"))
+
     async def withdraw(
         self,
         user_id: str,

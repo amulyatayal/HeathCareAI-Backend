@@ -7,7 +7,7 @@ All endpoints are under /api/v2/admin (mounted with prefix="/api/v2/admin").
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from models.admin_schemas import (
     AdminLoginRequest,
@@ -29,11 +29,21 @@ from models.notification_schemas import (
     AdminNotificationResponse,
     AdminNotificationListResponse,
 )
+from models.event_schemas import (
+    EventCreateRequest,
+    EventUpdateRequest,
+    EventResponse,
+    AdminEventListResponse,
+    AdminEventCreateResponse,
+    EventMutationResponse,
+)
 from services.admin_auth_service import get_admin_auth_service
 from services.pathway_resource_service import get_pathway_resource_service
 from services.access_code_service import get_access_code_service
 from services.notification_service import get_notification_service
+from services.admin_events_service import get_admin_events_service
 from services.admin_patient_share_service import get_admin_patient_share_service
+from api.event_id_validation import require_valid_event_id
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +266,79 @@ async def delete_notification(
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
     return DeleteResponse(message="Notification deleted successfully")
+
+
+# ================================
+# Community Events
+# ================================
+
+_ADMIN_EVENTS_LIST = "GET /api/v2/admin/events"
+
+
+@router.get("/events", response_model=AdminEventListResponse)
+async def list_admin_events(
+    status: str = Query("all", pattern="^(all|published|cancelled)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(get_current_admin),
+):
+    """List events created by the authenticated clinician (includes cancelled)."""
+    svc = get_admin_events_service()
+    result = svc.list_events(admin["sub"], status=status, limit=limit, offset=offset)
+    return AdminEventListResponse(
+        events=[EventResponse(**e) for e in result["events"]],
+        total_count=result["total_count"],
+    )
+
+
+@router.post("/events", response_model=AdminEventCreateResponse, status_code=201)
+async def create_admin_event(
+    body: EventCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Create a community event for this clinician's patients."""
+    svc = get_admin_events_service()
+    event = svc.create_event(
+        clinician_id=admin["sub"],
+        hospital_id=admin.get("hospital_id"),
+        data=body.model_dump(),
+    )
+    return AdminEventCreateResponse(
+        id=event["id"],
+        message="Event created",
+        event=EventResponse(**event),
+    )
+
+
+@router.put("/events/{event_id}", response_model=EventMutationResponse)
+async def update_admin_event(
+    event_id: str,
+    body: EventUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Update an event (partial)."""
+    event_id = require_valid_event_id(event_id, list_endpoint=_ADMIN_EVENTS_LIST)
+    svc = get_admin_events_service()
+    updated = svc.update_event(
+        event_id, admin["sub"], body.model_dump(exclude_unset=True)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EventMutationResponse(message="Event updated", event=EventResponse(**updated))
+
+
+@router.delete("/events/{event_id}", response_model=DeleteResponse)
+async def cancel_admin_event(
+    event_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """Soft-cancel an event (status → cancelled)."""
+    event_id = require_valid_event_id(event_id, list_endpoint=_ADMIN_EVENTS_LIST)
+    svc = get_admin_events_service()
+    ok = svc.cancel_event(event_id, admin["sub"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return DeleteResponse(message="Event cancelled")
 
 
 # ================================
