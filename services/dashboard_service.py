@@ -82,11 +82,16 @@ class DashboardService:
         streak_days = 0
 
         if recent_items:
-            scores = [int(item.get("mood_score", 0)) for item in recent_items]
-            avg_mood = round(sum(scores) / len(scores), 1)
-            wellness_score = avg_mood
-
-            trend_direction, trend_percentage = mood_service._calculate_trend(recent_items)
+            scored = [
+                item for item in recent_items if item.get("mood_score") is not None
+            ]
+            if scored:
+                scores = [int(item["mood_score"]) for item in scored]
+                avg_mood = round(sum(scores) / len(scores), 1)
+                wellness_score = avg_mood
+                trend_direction, trend_percentage = mood_service._calculate_trend(
+                    recent_items
+                )
             streak_days = self._calculate_streak(recent_items)
 
         next_appt_raw = appt_service.get_next_upcoming(user_id)
