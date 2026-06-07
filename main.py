@@ -43,6 +43,7 @@ from api import (
     notification_router,
 )
 from api import patient_consent_router, patient_grievance_router, patient_share_router
+from api import recipe_router
 from api.test_auth_routes import router as test_auth_router
 
 # ================================
@@ -214,6 +215,7 @@ app.include_router(notification_router, prefix="/api/v2")
 app.include_router(patient_consent_router, prefix="/api/v2")
 app.include_router(patient_grievance_router, prefix="/api/v2")
 app.include_router(patient_share_router, prefix="/api/v2")
+app.include_router(recipe_router, prefix="/api/v2")
 
 
 # ================================

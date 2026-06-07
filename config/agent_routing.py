@@ -20,6 +20,7 @@ class KnowledgeBase(str, Enum):
     """Available knowledge bases for retrieval."""
     MEDICAL = "medical_all_kb"  # Main breast cancer KB (PDFs, Q&A)
     NUTRITION = "nutrition_assistant"    # Nutrition and recipe KB
+    RECIPE = "recipe_catalog"            # Curated meal catalog (data/recipe/meals.json)
     FORUM = "forum_posts"                # Community forum discussions
     EMOTIONAL = "emotional_support"      # Emotional support content (future)
     LOGISTICS = "logistics_navigation"   # Hospital/insurance navigation (future)
@@ -48,6 +49,7 @@ class ReasoningAgentType(str, Enum):
     # Follow-up Care Agents
     FOLLOW_UP = "follow_up_agent"
     NUTRITION = "nutrition_agent"
+    RECIPE = "recipe_agent"
     EXERCISE = "exercise_agent"
     CLOTHING = "clothing_agent"
     
@@ -180,6 +182,14 @@ INTENT_ROUTING: Dict[IntentCategory, AgentRoute] = {
         strict_rag=False  # Can use LLM general nutrition knowledge
     ),
     
+    IntentCategory.MEAL_PLANNING: AgentRoute(
+        agent_type=ReasoningAgentType.RECIPE,
+        knowledge_bases=[KnowledgeBase.RECIPE],  # Curated meal catalog (meals.json)
+        model_type=ModelType.FAST,
+        requires_stage=False,  # Diet/allergy preferences drive results, not stage
+        strict_rag=False,  # Catalog is inspiration; agent may compose new meals
+    ),
+
     IntentCategory.EXERCISE: AgentRoute(
         agent_type=ReasoningAgentType.EXERCISE,
         knowledge_bases=[KnowledgeBase.MEDICAL],
@@ -309,6 +319,12 @@ Help patients understand the transition from active treatment to surveillance.""
 Your role is to provide practical nutrition advice, recipes, and dietary recommendations.
 Focus on managing treatment side effects (nausea, taste changes, appetite loss) and supporting recovery.
 Provide actionable, easy-to-follow suggestions appropriate to the patient's situation.""",
+
+    ReasoningAgentType.RECIPE: """You are a meal-planning specialist for breast cancer patients.
+Your role is to suggest practical, appetising meals that respect the patient's dietary preference (vegetarian, non-vegetarian, vegan) and strictly avoid every allergen they list.
+Use the provided meal catalogue as inspiration; you may adapt or compose new meals, but never include an ingredient that contains a listed allergen.
+Keep recipes simple, wholesome, and easy to follow. Favour gentle, nourishing options suitable during and after treatment.
+Never give medical or dosage advice — only food and cooking guidance.""",
 
     ReasoningAgentType.EXERCISE: """You are an exercise and physical activity specialist for breast cancer patients.
 Your role is to provide guidance on safe exercise during and after treatment.

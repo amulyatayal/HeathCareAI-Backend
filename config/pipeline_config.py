@@ -34,6 +34,7 @@ class IntentCategory(str, Enum):
     # Follow-up Care Categories
     FOLLOW_UP_CARE = "follow_up_care"  # General follow-up queries
     NUTRITION = "nutrition"
+    MEAL_PLANNING = "meal_planning"  # Recipe chatbot: diet/allergy-aware meal suggestions
     EXERCISE = "exercise"
     CLOTHING = "clothing"
     

@@ -25,6 +25,10 @@ from services.agents.validator_agent import (
     quick_safety_check,
     sanitize_response
 )
+from services.agents.recipe_agent import (
+    RecipeAgent,
+    get_recipe_agent
+)
 
 __all__ = [
     "BaseAgent",
@@ -43,5 +47,7 @@ __all__ = [
     "ValidatorAgent",
     "quick_safety_check",
     "sanitize_response",
+    "RecipeAgent",
+    "get_recipe_agent",
 ]
 
