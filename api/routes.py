@@ -21,7 +21,7 @@ from models.schemas import (
     HealthCheckResponse,
     create_pipeline_context
 )
-from services.agents.orchestrator import PipelineOrchestrator
+from services.agents.orchestrator import PipelineOrchestrator, ENABLE_STAGE_AGENT
 from services.conversation_logger import get_conversation_logger
 from config.pipeline_config import (
     IntentCategory,
@@ -223,11 +223,14 @@ async def health_check_v2():
         # List available agents
         agents_available = [
             "IntentAgent",
-            "StageAgent", 
+        ]
+        if ENABLE_STAGE_AGENT:
+            agents_available.append("StageAgent")
+        agents_available.extend([
             "RetrievalAgent",
             "ReasoningAgent (18 variants)",
-            "ValidatorAgent"
-        ]
+            "ValidatorAgent",
+        ])
         
         # List available knowledge bases
         kbs_available = [kb.value for kb in KnowledgeBase]

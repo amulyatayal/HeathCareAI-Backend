@@ -13,7 +13,6 @@ from datetime import datetime
 
 from services.agents.base_agent import BaseAgent
 from services.agents.intent_agent import IntentAgent
-from services.agents.stage_agent_v2 import StageAgentV2
 from services.agents.retrieval_agent import RetrievalAgent
 from services.agents.video_retrieval_agent import VideoRetrievalAgent
 from services.agents.reasoning_agent import get_reasoning_agent
@@ -29,13 +28,15 @@ from models.schemas import (
     ModificationProposal,
     create_pipeline_context
 )
-from config.pipeline_config import IntentCategory, PatientStage, CertaintyLevel, SPEC_VERSION
+from config.pipeline_config import IntentCategory, IntentThresholds, PatientStage, CertaintyLevel, SPEC_VERSION
 from config.agent_routing import is_citation_only
 from config.settings import settings
 from services.metrics import record_latency, record_count
 
 logger = logging.getLogger(__name__)
 
+# Temporary: set True to re-enable StageAgentV2 LLM inference + Phase 1.5 stage proposals
+ENABLE_STAGE_AGENT = False
 
 # Stage-sensitive intents that benefit from personalization
 STAGE_SENSITIVE_INTENTS = [
@@ -100,7 +101,10 @@ class PipelineOrchestrator:
     def __init__(self, enable_llm_validation: bool = True):  # LLM validation ON by default (uses Haiku)
         # Initialize reusable agents
         self.intent_agent = IntentAgent()
-        self.stage_agent = StageAgentV2()
+        self.stage_agent = None
+        if ENABLE_STAGE_AGENT:
+            from services.agents.stage_agent_v2 import StageAgentV2
+            self.stage_agent = StageAgentV2()
         self.retrieval_agent = RetrievalAgent()
         self.video_retrieval_agent = VideoRetrievalAgent()  # YouTube video retrieval
         self.validator_agent = ValidatorAgent(use_llm_validation=enable_llm_validation)
@@ -207,7 +211,7 @@ class PipelineOrchestrator:
             modification_proposal = None
             stage_update_message = None
             
-            if user_id and not is_guest and profile:
+            if ENABLE_STAGE_AGENT and user_id and not is_guest and profile:
                 inferred = ctx.stage_result
                 inferred_stage_id = ctx.metadata.get("granular_stage_id")
                 
@@ -379,6 +383,19 @@ class PipelineOrchestrator:
             logger.error(f"Pipeline error: {e}")
             return self._create_error_response(ctx, str(e), start_time)
     
+    def _should_abort_for_clarification(self, result) -> bool:
+        """Return True only when intent is genuinely unclear.
+
+        A known intent with confidence >= CLARIFICATION_REQUIRED threshold
+        is sufficient to proceed to RAG even if the LLM set clarification_needed.
+        """
+        if not result or not result.clarification_needed:
+            return False
+        if (result.intent != IntentCategory.UNKNOWN and
+                result.confidence >= IntentThresholds.CLARIFICATION_REQUIRED):
+            return False
+        return True
+
     async def _run_intent_phase(
         self,
         ctx: PipelineContext
@@ -404,52 +421,58 @@ class PipelineOrchestrator:
             f"Stage (from profile): {ctx.stage_result.stage}"
         )
         
-        # Check if clarification is needed
-        if ctx.intent_result and ctx.intent_result.clarification_needed:
+        if self._should_abort_for_clarification(ctx.intent_result):
             ctx.should_abort = True
             ctx.abort_reason = "Clarification needed"
-        
+        elif ctx.intent_result:
+            ctx.intent_result.clarification_needed = False
+
         return ctx
-    
+
     async def _run_classification_phase(
         self,
         ctx: PipelineContext
     ) -> PipelineContext:
-        """Run intent and stage classification in parallel."""
+        """Run intent classification; optionally run stage inference in parallel."""
+        if not ENABLE_STAGE_AGENT:
+            logger.info("Phase 1: Running intent classification (stage agent disabled)...")
+            ctx, intent_trace = await self.intent_agent.run(ctx)
+            self._traces.append(intent_trace)
+            stage_label = ctx.stage_result.stage if ctx.stage_result else PatientStage.UNKNOWN
+            self._log_step(
+                step_name="classification",
+                agent_name="intent_only",
+                input_summary="",
+                output_summary=f"intent={ctx.intent_result.intent}, stage={stage_label}",
+                latency_ms=intent_trace.latency_ms,
+                model_used=None,
+                safety_flags=[],
+            )
+            logger.info(
+                f"Classification complete: intent={ctx.intent_result.intent}, "
+                f"stage={stage_label} (from profile/phase 0)"
+            )
+            if self._should_abort_for_clarification(ctx.intent_result):
+                ctx.should_abort = True
+                ctx.abort_reason = "Clarification needed"
+            elif ctx.intent_result:
+                ctx.intent_result.clarification_needed = False
+            return ctx
+
         logger.info("Phase 1: Running classification (parallel)...")
-        
-        # Create tasks for parallel execution
+
         intent_task = asyncio.create_task(self.intent_agent.run(ctx))
-        # Pass intent=None as they are parallel; StageAgentV2 handles this
         stage_task = asyncio.create_task(self.stage_agent.run(ctx))
-        
-        # Wait for both to complete
+
         (ctx_intent, intent_trace), (ctx_stage, stage_trace) = await asyncio.gather(
             intent_task, stage_task
         )
-        
-        # Merge results into main context
-        # Note: ctx objects are copies or same ref? usually copies in async if not careful, 
-        # but here 'run' returns (updated_ctx, trace).
-        
+
         ctx.intent_result = ctx_intent.intent_result
-        # Logic to prioritize Profile Stage vs Inferred Stage?
-        # Spec 7.5 says "Stage inferred per request".
-        # But for 'Context' passed to Reasoning Agent, we might prefer the Profile if it exists.
-        # However, StageAgentV2 is the authority on "Where does the user appear to be NOW".
-        # We will store the INFERRED result in stage_result as per spec.
-        # If we want to keep Profile stage, we should have stored it elsewhere or make a decision here.
-        
-        # Currently, Phase 0 loaded Profile Stage. Phase 1 (StageAgent) overwrites it.
-        # This is correct for "Session Context" adaptation (e.g. user says "I just had surgery" but profile says "Pre-op" -> we should answer as if they had surgery).
-        # AND we trigger a proposal.
-        
         ctx.stage_result = ctx_stage.stage_result
-        # Merge metadata (granular id)
         if ctx_stage.metadata.get("granular_stage_id"):
             ctx.metadata["granular_stage_id"] = ctx_stage.metadata["granular_stage_id"]
-        
-        # Store traces
+
         self._traces.extend([intent_trace, stage_trace])
         self._log_step(
             step_name="classification",
@@ -460,19 +483,20 @@ class PipelineOrchestrator:
             model_used=None,
             safety_flags=[],
         )
-        
+
         logger.info(
             f"Classification complete: intent={ctx.intent_result.intent}, "
             f"stage={ctx.stage_result.stage}"
         )
-        
-        # Check if clarification is needed
-        if ctx.intent_result and ctx.intent_result.clarification_needed:
+
+        if self._should_abort_for_clarification(ctx.intent_result):
             ctx.should_abort = True
             ctx.abort_reason = "Clarification needed"
-        
+        elif ctx.intent_result:
+            ctx.intent_result.clarification_needed = False
+
         return ctx
-    
+
     async def _run_retrieval_phase(
         self,
         ctx: PipelineContext
