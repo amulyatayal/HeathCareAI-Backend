@@ -147,7 +147,10 @@ RESPONSE FORMAT:
 {disclaimer_instruction}"""
 
 
-REASONING_USER_TEMPLATE = """Patient Question: {question}
+REASONING_USER_TEMPLATE = """Recent conversation:
+{conversation_history}
+
+Current question: {question}
 
 Patient Stage: {stage} ({stage_certainty})
 {stage_context}
@@ -393,13 +396,33 @@ class ReasoningAgent(BaseAgent):
         
         # Determine certainty string
         certainty_str = stage_certainty.value if hasattr(stage_certainty, 'value') else str(stage_certainty)
-        
+
+        conversation_history = self._format_conversation_history(
+            context.conversation_history
+        )
+
         return REASONING_USER_TEMPLATE.format(
+            conversation_history=conversation_history,
             question=context.user_message,
             stage=stage,
             stage_certainty=certainty_str,
             stage_context=stage_context
         )
+
+    def _format_conversation_history(self, history: list) -> str:
+        """Format recent conversation for the reasoning prompt."""
+        if not history:
+            return "No previous conversation."
+
+        recent = history[-6:] if len(history) > 6 else history
+        lines = []
+        for msg in recent:
+            role = msg.get("role", "user")
+            label = "Patient" if role == "user" else "Assistant"
+            content = msg.get("content", "")[:500]
+            if content:
+                lines.append(f"{label}: {content}")
+        return "\n".join(lines) if lines else "No previous conversation."
     
     def _get_additional_rules(self, context: PipelineContext) -> str:
         """Get intent-specific additional rules."""

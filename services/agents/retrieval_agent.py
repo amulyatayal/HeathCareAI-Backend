@@ -92,14 +92,15 @@ class RetrievalAgent(BaseAgent):
         
         # Search primary KB first
         primary_kb = knowledge_bases[0] if knowledge_bases else KnowledgeBase.MEDICAL
-        
+        search_query = self._build_search_query(context)
+
         # Note: citation_only vs derived_answer selection now happens at response time
         # in the reasoning agent, not during retrieval. Each document contains both answer types.
-        
+
         try:
             result = await self._search_kb(
                 kb_name=primary_kb.value,
-                query=context.user_message,
+                query=search_query,
                 min_chunks=min_chunks,
                 min_score=min_score,
                 require_keyword=require_keyword
@@ -112,7 +113,7 @@ class RetrievalAgent(BaseAgent):
                 for secondary_kb in knowledge_bases[1:]:
                     secondary_result = await self._search_kb(
                         kb_name=secondary_kb.value,
-                        query=context.user_message,
+                        query=search_query,
                         min_chunks=min_chunks,
                         min_score=min_score,
                         require_keyword=require_keyword
@@ -144,7 +145,28 @@ class RetrievalAgent(BaseAgent):
             )
         
         return context
-    
+
+    def _build_search_query(self, context: PipelineContext) -> str:
+        """Build search query; expand short follow-ups with prior user message."""
+        search_query = context.user_message
+        if len(search_query) >= 50 or not context.conversation_history:
+            return search_query
+
+        last_user_message = None
+        for msg in reversed(context.conversation_history):
+            if msg.get("role") == "user" and msg.get("content"):
+                last_user_message = msg.get("content", "").strip()
+                break
+
+        if last_user_message:
+            expanded = f"{last_user_message} {search_query}".strip()
+            logger.info(
+                f"Expanded short follow-up query: '{search_query}' -> '{expanded[:80]}...'"
+            )
+            return expanded
+
+        return search_query
+
     async def _search_kb(
         self,
         kb_name: str,

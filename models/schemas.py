@@ -251,6 +251,10 @@ class ModificationProposal(BaseModel):
 class PipelineResponse(BaseModel):
     """Final response from the multi-agent pipeline."""
     request_id: str
+    session_id: Optional[str] = Field(
+        None,
+        description="Chat session id for multi-turn continuity (authenticated users)",
+    )
     response: str = Field(..., description="Final response to user")
     intent: IntentCategory
     stage: PatientStage

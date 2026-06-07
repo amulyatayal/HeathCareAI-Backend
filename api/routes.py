@@ -23,6 +23,11 @@ from models.schemas import (
 )
 from services.agents.orchestrator import PipelineOrchestrator, ENABLE_STAGE_AGENT
 from services.conversation_logger import get_conversation_logger
+from services.patient_chat_session_service import (
+    get_patient_chat_session_service,
+    SessionNotFoundError,
+    SessionOwnershipError,
+)
 from config.pipeline_config import (
     IntentCategory,
     PatientStage,
@@ -96,19 +101,61 @@ async def chat_v2(
     try:
         # Extract user identity from headers
         user_id, is_guest = _extract_user_identity(authorization, x_user_id)
-        
+
+        chat_session = None
+        conversation_history = request.conversation_history
+
+        if not is_guest and user_id:
+            session_service = get_patient_chat_session_service()
+            try:
+                chat_session = await session_service.get_or_create_session(
+                    user_id=user_id,
+                    session_id=request.session_id,
+                )
+                conversation_history = await session_service.get_recent_messages(
+                    chat_session.session_id
+                )
+            except SessionNotFoundError:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Chat session not found.",
+                )
+            except SessionOwnershipError:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to this chat session.",
+                )
+
         # Get orchestrator
         orchestrator = get_orchestrator()
-        
+
         # Process through pipeline with user identity for profile loading
         response = await orchestrator.process(
             message=request.message,
-            session_id=request.session_id,
+            session_id=chat_session.session_id if chat_session else request.session_id,
             user_id=user_id,
             is_guest=is_guest,
-            conversation_history=request.conversation_history,
+            conversation_history=conversation_history,
             include_trace=include_trace or request.include_trace
         )
+
+        if chat_session:
+            session_service = get_patient_chat_session_service()
+            intent_value = (
+                response.intent.value
+                if hasattr(response.intent, "value")
+                else str(response.intent)
+            )
+            await session_service.append_turn(
+                session_id=chat_session.session_id,
+                user_message=request.message,
+                assistant_message=response.response,
+                metadata={
+                    "intent": intent_value,
+                    "request_id": response.request_id,
+                },
+            )
+            response.session_id = chat_session.session_id
         
         # Calculate total latency
         total_latency = int((time.time() - start_time) * 1000)

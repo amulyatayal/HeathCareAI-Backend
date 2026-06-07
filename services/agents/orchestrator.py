@@ -145,6 +145,7 @@ class PipelineOrchestrator:
             session_id=session_id,
             conversation_history=conversation_history or []
         )
+        ctx.user_id = user_id
         self._current_request_id = ctx.request_id
         
         logger.info(f"Pipeline started: request_id={ctx.request_id}")
