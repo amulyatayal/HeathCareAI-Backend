@@ -98,90 +98,100 @@ class AgentRoute:
 # ================================
 
 INTENT_ROUTING: Dict[IntentCategory, AgentRoute] = {
-    
+
     # ---- Core Medical ----
     IntentCategory.SYMPTOMS: AgentRoute(
         agent_type=ReasoningAgentType.SYMPTOMS,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.SURGERY_PROCEDURES: AgentRoute(
         agent_type=ReasoningAgentType.SURGERY,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.DRAINS_WOUND_CARE: AgentRoute(
         agent_type=ReasoningAgentType.WOUND_CARE,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True  # Specific medical instructions: verbatim only
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.CANCER_TREATMENT: AgentRoute(
         agent_type=ReasoningAgentType.CANCER_TREATMENT,
-        knowledge_bases=[KnowledgeBase.CANCER_TREATMENT],  # Per-intent KB first
+        knowledge_bases=[KnowledgeBase.CANCER_TREATMENT],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True  # Use generated answers from new KB
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.MEDICATION_INFO: AgentRoute(
         agent_type=ReasoningAgentType.MEDICATION,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True  # Safety-critical: verbatim text only
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.SIDE_EFFECTS: AgentRoute(
         agent_type=ReasoningAgentType.SIDE_EFFECTS,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True  
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     # ---- Perioperative ----
     IntentCategory.PRE_SURGERY_PREHAB: AgentRoute(
         agent_type=ReasoningAgentType.PREHAB,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.POST_SURGERY_RECOVERY: AgentRoute(
         agent_type=ReasoningAgentType.RECOVERY,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        citation_only=True
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     # ---- Follow-up Care ----
     IntentCategory.FOLLOW_UP_CARE: AgentRoute(
         agent_type=ReasoningAgentType.FOLLOW_UP,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
-        requires_stage=True,
-        citation_only=True
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.NUTRITION: AgentRoute(
         agent_type=ReasoningAgentType.NUTRITION,
         knowledge_bases=[KnowledgeBase.NUTRITION, KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
-        requires_stage=True,
-        strict_rag=False  # Can use LLM general nutrition knowledge
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.MEAL_PLANNING: AgentRoute(
         agent_type=ReasoningAgentType.RECIPE,
         knowledge_bases=[KnowledgeBase.RECIPE],  # Curated meal catalog (meals.json)
@@ -194,69 +204,75 @@ INTENT_ROUTING: Dict[IntentCategory, AgentRoute] = {
         agent_type=ReasoningAgentType.EXERCISE,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
-        requires_stage=True,
-        strict_rag=False  # Can use LLM general exercise knowledge
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.CLOTHING: AgentRoute(
         agent_type=ReasoningAgentType.CLOTHING,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
-        requires_stage=True,
-        strict_rag=False  # Can use LLM general advice
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     # ---- Support & Admin ----
     IntentCategory.EMOTIONAL_SUPPORT: AgentRoute(
         agent_type=ReasoningAgentType.EMOTIONAL,
         knowledge_bases=[KnowledgeBase.FORUM, KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
-        requires_stage=True,
-        strict_rag=False  # LLM empathy is helpful
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.DIAGNOSIS_TESTING: AgentRoute(
         agent_type=ReasoningAgentType.DIAGNOSIS,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        strict_rag=True,  # Medical accuracy required
-        citation_only=True  # Medical accuracy: verbatim text only
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.ADMIN_LOGISTICS: AgentRoute(
         agent_type=ReasoningAgentType.LOGISTICS,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
         requires_stage=False,
-        strict_rag=False  # General process info OK
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     # ---- Safety & Info ----
     IntentCategory.SAFETY_RED_FLAGS: AgentRoute(
         agent_type=ReasoningAgentType.SAFETY,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
-        requires_stage=True,
-        strict_rag=True,  # MUST be strict - safety critical
-        citation_only=True  # Safety-critical: verbatim text only
+        requires_stage=False,
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     IntentCategory.STATISTICS: AgentRoute(
         agent_type=ReasoningAgentType.STATISTICS,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.ACCURATE,
         requires_stage=False,
-        strict_rag=True  # Must be accurate
+        strict_rag=True,
+        citation_only=False,
     ),
-    
+
     # ---- Fallback ----
     IntentCategory.UNKNOWN: AgentRoute(
         agent_type=ReasoningAgentType.GENERAL,
         knowledge_bases=[KnowledgeBase.MEDICAL],
         model_type=ModelType.FAST,
         requires_stage=False,
-        strict_rag=False  # Can use general knowledge for unknown queries
+        strict_rag=True,
+        citation_only=False,
     ),
 }
 

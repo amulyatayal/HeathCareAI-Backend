@@ -7,7 +7,7 @@ All endpoints are under /api/v2/admin (mounted with prefix="/api/v2/admin").
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from models.admin_schemas import (
     AdminLoginRequest,
@@ -29,10 +29,28 @@ from models.notification_schemas import (
     AdminNotificationResponse,
     AdminNotificationListResponse,
 )
+from models.event_schemas import (
+    EventCreateRequest,
+    EventUpdateRequest,
+    EventResponse,
+    AdminEventListResponse,
+    AdminEventCreateResponse,
+    EventMutationResponse,
+)
+from models.clinical_team_schemas import (
+    TeamMemberCreateRequest,
+    TeamMemberUpdateRequest,
+    TeamMemberResponse,
+    AdminTeamMemberListResponse,
+    AdminTeamMemberCreateResponse,
+    AdminTeamMemberMutationResponse,
+)
 from services.admin_auth_service import get_admin_auth_service
 from services.pathway_resource_service import get_pathway_resource_service
 from services.access_code_service import get_access_code_service
 from services.notification_service import get_notification_service
+from services.admin_events_service import get_admin_events_service
+from services.admin_clinical_team_service import get_admin_clinical_team_service
 from services.admin_patient_share_service import get_admin_patient_share_service
 
 logger = logging.getLogger(__name__)
@@ -256,6 +274,149 @@ async def delete_notification(
     if not ok:
         raise HTTPException(status_code=404, detail="Notification not found")
     return DeleteResponse(message="Notification deleted successfully")
+
+
+# ================================
+# Community Events
+# ================================
+
+
+@router.get("/events", response_model=AdminEventListResponse)
+async def list_admin_events(
+    status: str = Query("all", pattern="^(all|published|cancelled)$"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(get_current_admin),
+):
+    """List events created by the authenticated clinician (includes cancelled)."""
+    svc = get_admin_events_service()
+    result = svc.list_events(admin["sub"], status=status, limit=limit, offset=offset)
+    return AdminEventListResponse(
+        events=[EventResponse(**e) for e in result["events"]],
+        total_count=result["total_count"],
+    )
+
+
+@router.post("/events", response_model=AdminEventCreateResponse, status_code=201)
+async def create_admin_event(
+    body: EventCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Create a community event for this clinician's patients."""
+    svc = get_admin_events_service()
+    event = svc.create_event(
+        clinician_id=admin["sub"],
+        hospital_id=admin.get("hospital_id"),
+        data=body.model_dump(),
+    )
+    return AdminEventCreateResponse(
+        id=event["id"],
+        message="Event created",
+        event=EventResponse(**event),
+    )
+
+
+@router.put("/events/{event_id}", response_model=EventMutationResponse)
+async def update_admin_event(
+    event_id: str,
+    body: EventUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Update an event (partial)."""
+    svc = get_admin_events_service()
+    updated = svc.update_event(
+        event_id, admin["sub"], body.model_dump(exclude_unset=True)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EventMutationResponse(message="Event updated", event=EventResponse(**updated))
+
+
+@router.delete("/events/{event_id}", response_model=DeleteResponse)
+async def cancel_admin_event(
+    event_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """Soft-cancel an event (status → cancelled)."""
+    svc = get_admin_events_service()
+    ok = svc.cancel_event(event_id, admin["sub"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return DeleteResponse(message="Event cancelled")
+
+
+# ================================
+# Clinical Team
+# ================================
+
+
+@router.get("/clinical-team", response_model=AdminTeamMemberListResponse)
+async def list_clinical_team_members(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(get_current_admin),
+):
+    """List care team members for the authenticated clinician."""
+    svc = get_admin_clinical_team_service()
+    result = svc.list_members(admin["sub"], limit=limit, offset=offset)
+    return AdminTeamMemberListResponse(
+        team_members=[TeamMemberResponse(**m) for m in result["team_members"]],
+        total_count=result["total_count"],
+    )
+
+
+@router.post(
+    "/clinical-team",
+    response_model=AdminTeamMemberCreateResponse,
+    status_code=201,
+)
+async def create_clinical_team_member(
+    body: TeamMemberCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Add a care team member to this clinician's roster."""
+    svc = get_admin_clinical_team_service()
+    member = svc.create_member(
+        clinician_id=admin["sub"],
+        data=body.model_dump(),
+    )
+    return AdminTeamMemberCreateResponse(
+        id=member["id"],
+        message="Team member added",
+        team_member=TeamMemberResponse(**member),
+    )
+
+
+@router.put("/clinical-team/{team_member_id}", response_model=AdminTeamMemberMutationResponse)
+async def update_clinical_team_member(
+    team_member_id: str,
+    body: TeamMemberUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """Update a care team member (partial)."""
+    svc = get_admin_clinical_team_service()
+    updated = svc.update_member(
+        team_member_id, admin["sub"], body.model_dump(exclude_unset=True)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    return AdminTeamMemberMutationResponse(
+        message="Team member updated",
+        team_member=TeamMemberResponse(**updated),
+    )
+
+
+@router.delete("/clinical-team/{team_member_id}", response_model=DeleteResponse)
+async def delete_clinical_team_member(
+    team_member_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """Remove a care team member (hard delete)."""
+    svc = get_admin_clinical_team_service()
+    ok = svc.delete_member(team_member_id, admin["sub"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    return DeleteResponse(message="Team member removed")
 
 
 # ================================

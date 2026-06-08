@@ -41,11 +41,12 @@ class MoodService:
             "user_id": user_id,
             "timestamp": ts,
             "entry_id": entry_id,
-            "mood_score": data["mood_score"],
             "note": data.get("note"),
             "emotions": data.get("emotions", []),
             "triggers": data.get("triggers", []),
         }
+        if data.get("mood_score") is not None:
+            item["mood_score"] = data["mood_score"]
 
         if data.get("quick_check"):
             qc = data["quick_check"]
@@ -78,10 +79,10 @@ class MoodService:
             trend_direction = None
             trend_percentage = None
 
-            if entries:
-                scores = [e["mood_score"] for e in entries]
+            scored_entries = [e for e in entries if e.get("mood_score") is not None]
+            if scored_entries:
+                scores = [e["mood_score"] for e in scored_entries]
                 avg_mood = round(sum(scores) / len(scores), 1)
-
                 trend_direction, trend_percentage = self._calculate_trend(items)
 
             return {
@@ -133,7 +134,9 @@ class MoodService:
             except (ValueError, KeyError):
                 continue
 
-            score = int(item.get("mood_score", 0))
+            if item.get("mood_score") is None:
+                continue
+            score = int(item["mood_score"])
             if ts >= week_ago:
                 recent_scores.append(score)
             elif ts >= two_weeks_ago:
@@ -167,10 +170,11 @@ class MoodService:
                 "energy_level": int(qc["energy_level"]) if qc.get("energy_level") is not None else None,
             }
 
+        mood_score = item.get("mood_score")
         return {
             "entry_id": item["entry_id"],
             "user_id": item["user_id"],
-            "mood_score": int(item["mood_score"]),
+            "mood_score": int(mood_score) if mood_score is not None else None,
             "note": item.get("note"),
             "emotions": item.get("emotions", []),
             "triggers": item.get("triggers", []),

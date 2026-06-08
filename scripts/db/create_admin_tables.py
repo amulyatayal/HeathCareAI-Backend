@@ -16,6 +16,8 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from datetime import datetime
+
 import boto3
 from botocore.exceptions import ClientError
 from config import settings
@@ -111,26 +113,110 @@ def wait_for_tables():
             print(f"    Could not verify {table_name}: {e}")
 
 
-def seed_default_admin():
-    """Create a default admin user for development."""
+def seed_default_admins_and_access_codes():
+    """Create default admin users and fixed access codes for development."""
     from services.admin_auth_service import get_admin_auth_service
 
     service = get_admin_auth_service()
-    email = "admin@hospital.nhs.uk"
+    admins_to_seed = [
+        {
+            "email": "admin@hospital.nhs.uk",
+            "password": "admin123",
+            "name": "Dev Admin",
+            "role": "clinician",
+            "user_id": "CLN-DEV001",
+            "hospital_id": "dev",
+        },
+        {
+            "email": "admin@barts.com",
+            "password": "admin123",
+            "name": "Barts Admin",
+            "role": "clinician",
+            "user_id": "CLN-BARTS001",
+            "hospital_id": "barts",
+        },
+        {
+            "email": "admin@uhnm.com",
+            "password": "admin123",
+            "name": "UHNM Admin",
+            "role": "clinician",
+            "user_id": "CLN-UHNM001",
+            "hospital_id": "uhnm",
+        },
+        {
+            "email": "admin@futuredreams.com",
+            "password": "admin123",
+            "name": "Future Dreams Admin",
+            "role": "clinician",
+            "user_id": "CLN-FD001",
+            "hospital_id": "futuredreams",
+        },
+    ]
 
-    try:
-        user = service.create_user(
-            email=email,
-            password="admin123",
-            name="Dev Admin",
-            role="clinician",
-            user_id="CLN-DEV001",
-        )
-        print(f"  Seeded admin user: {user['email']} (password: admin123)")
-    except ValueError:
-        print(f"  Admin user {email} already exists — skipping seed")
-    except Exception as e:
-        print(f"  Could not seed admin user: {e}")
+    for admin in admins_to_seed:
+        try:
+            user = service.create_user(
+                email=admin["email"],
+                password=admin["password"],
+                name=admin["name"],
+                role=admin["role"],
+                user_id=admin["user_id"],
+                hospital_id=admin["hospital_id"],
+            )
+            print(f"  Seeded admin user: {user['email']} (password: admin123)")
+        except ValueError:
+            print(f"  Admin user {admin['email']} already exists — skipping seed")
+        except Exception as e:
+            print(f"  Could not seed admin user {admin['email']}: {e}")
+
+    # Fixed deterministic access codes requested for hospitals.
+    access_codes_to_seed = [
+        {
+            "access_code": "barts-2026-X1Y1".upper(),
+            "clinician_id": "CLN-BARTS001",
+            "clinician_name": "Barts Admin",
+            "hospital_id": "barts",
+        },
+        {
+            "access_code": "uhnm-2026-X1Y1".upper(),
+            "clinician_id": "CLN-UHNM001",
+            "clinician_name": "UHNM Admin",
+            "hospital_id": "uhnm",
+        },
+        {
+            "access_code": "futuredreams-2026-X1Y1".upper(),
+            "clinician_id": "CLN-FD001",
+            "clinician_name": "Future Dreams Admin",
+            "hospital_id": "futuredreams",
+        },
+    ]
+
+    dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+    access_codes_table = dynamodb.Table("AccessCodes")
+    now = datetime.utcnow().isoformat() + "Z"
+
+    for row in access_codes_to_seed:
+        try:
+            access_codes_table.put_item(
+                Item={
+                    "access_code": row["access_code"],
+                    "clinician_id": row["clinician_id"],
+                    "clinician_name": row["clinician_name"],
+                    "hospital_id": row["hospital_id"],
+                    "created_at": now,
+                    "is_active": True,
+                },
+                ConditionExpression="attribute_not_exists(access_code)",
+            )
+            print(f"  Seeded access code: {row['access_code']}")
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                print(f"  Access code {row['access_code']} already exists — skipping seed")
+            elif e.response.get("Error", {}).get("Code") == "ResourceNotFoundException":
+                print("  AccessCodes table missing — skipping access code seed")
+                break
+            else:
+                print(f"  Could not seed access code {row['access_code']}: {e}")
 
 
 def main():
@@ -146,7 +232,7 @@ def main():
     if ok1 and ok2:
         wait_for_tables()
         print()
-        seed_default_admin()
+        seed_default_admins_and_access_codes()
         print()
         print("=" * 60)
         print("  Admin Portal tables ready!")

@@ -54,6 +54,7 @@ CLASSIFICATION RULES:
 - "emotional_support" should be chosen when the emotional component is the PRIMARY focus
 - "safety_red_flags" should be chosen when asking about urgent/emergency symptoms
 - Use "unknown" only when the message is truly ambiguous or off-topic
+- Only set clarification_needed=true if intent is "unknown" or confidence is below 0.6; if you can identify the intent confidently, set clarification_needed=false
 
 Respond with a JSON object containing:
 {
@@ -267,7 +268,13 @@ class IntentAgent(BaseAgent):
                     "I'm not sure I understood your question. "
                     "Are you asking about symptoms, treatment, nutrition, or something else?"
                 )
-        
+
+        # Clear intent with adequate confidence: override any LLM clarification flag
+        if (result.intent != IntentCategory.UNKNOWN and
+                result.confidence >= IntentThresholds.CLARIFICATION_REQUIRED):
+            result.clarification_needed = False
+            result.suggested_clarification = None
+
         return result
     
     def _get_output_summary(self, context: PipelineContext) -> Optional[str]:

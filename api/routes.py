@@ -21,8 +21,13 @@ from models.schemas import (
     HealthCheckResponse,
     create_pipeline_context
 )
-from services.agents.orchestrator import PipelineOrchestrator
+from services.agents.orchestrator import PipelineOrchestrator, ENABLE_STAGE_AGENT
 from services.conversation_logger import get_conversation_logger
+from services.patient_chat_session_service import (
+    get_patient_chat_session_service,
+    SessionNotFoundError,
+    SessionOwnershipError,
+)
 from config.pipeline_config import (
     IntentCategory,
     PatientStage,
@@ -97,19 +102,61 @@ async def chat_v2(
     try:
         # Resolve signed-in user vs guest (guests never require OAuth; see resolve_chat_user_identity)
         user_id, is_guest = resolve_chat_user_identity(authorization, x_user_id)
-        
+
+        chat_session = None
+        conversation_history = request.conversation_history
+
+        if not is_guest and user_id:
+            session_service = get_patient_chat_session_service()
+            try:
+                chat_session = await session_service.get_or_create_session(
+                    user_id=user_id,
+                    session_id=request.session_id,
+                )
+                conversation_history = await session_service.get_recent_messages(
+                    chat_session.session_id
+                )
+            except SessionNotFoundError:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Chat session not found.",
+                )
+            except SessionOwnershipError:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to this chat session.",
+                )
+
         # Get orchestrator
         orchestrator = get_orchestrator()
-        
+
         # Process through pipeline with user identity for profile loading
         response = await orchestrator.process(
             message=request.message,
-            session_id=request.session_id,
+            session_id=chat_session.session_id if chat_session else request.session_id,
             user_id=user_id,
             is_guest=is_guest,
-            conversation_history=request.conversation_history,
+            conversation_history=conversation_history,
             include_trace=include_trace or request.include_trace
         )
+
+        if chat_session:
+            session_service = get_patient_chat_session_service()
+            intent_value = (
+                response.intent.value
+                if hasattr(response.intent, "value")
+                else str(response.intent)
+            )
+            await session_service.append_turn(
+                session_id=chat_session.session_id,
+                user_message=request.message,
+                assistant_message=response.response,
+                metadata={
+                    "intent": intent_value,
+                    "request_id": response.request_id,
+                },
+            )
+            response.session_id = chat_session.session_id
         
         # Calculate total latency
         total_latency = int((time.time() - start_time) * 1000)
@@ -224,11 +271,14 @@ async def health_check_v2():
         # List available agents
         agents_available = [
             "IntentAgent",
-            "StageAgent", 
+        ]
+        if ENABLE_STAGE_AGENT:
+            agents_available.append("StageAgent")
+        agents_available.extend([
             "RetrievalAgent",
             "ReasoningAgent (18 variants)",
-            "ValidatorAgent"
-        ]
+            "ValidatorAgent",
+        ])
         
         # List available knowledge bases
         kbs_available = [kb.value for kb in KnowledgeBase]
