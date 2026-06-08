@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from services.agents.recipe_agent import get_recipe_agent
@@ -20,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["Recipes"])
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "recipe" / "meals.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "recipe"
+DATA_FILE = DATA_DIR / "meals.json"
+IMAGES_DIR = DATA_DIR / "images"
 
 # Per-(diet, allergies) cache of the full generated batch. Keeps pagination
 # stable across "Show more" calls and lets GET /recipes/{id} resolve generated
@@ -50,11 +53,13 @@ class MealSummary(BaseModel):
     desc: str
     time: str
     calories: int
+    image: Optional[str] = None  # API path, e.g. /recipes/images/recipe-001.png
 
 
 class Meal(MealSummary):
     diets: List[str]
     allergens: List[str]
+    symptom_support: List[str] = []
     ingredients: List[str]
     steps: List[str]
 
@@ -101,6 +106,13 @@ def _meal_id(m: dict) -> str:
     return _pick(m, "recipe_id", "id", default="")
 
 
+def _image_path(m: dict) -> Optional[str]:
+    """Stored as e.g. "images/recipe-001.png"; expose as an API path the
+    frontend can fetch: /recipes/images/recipe-001.png."""
+    raw_image = _pick(m, "image")
+    return f"/recipes/{raw_image.lstrip('/')}" if raw_image else None
+
+
 def _meal_summary(m: dict) -> MealSummary:
     nutrition = m.get("nutrition") or {}
     calories = _pick(m, "calories") or nutrition.get("calories_per_serving") or 0
@@ -111,6 +123,7 @@ def _meal_summary(m: dict) -> MealSummary:
         desc=_pick(m, "description", "desc", default=""),
         time=_pick(m, "time", default=""),
         calories=int(calories),
+        image=_image_path(m),
     )
 
 
@@ -120,6 +133,7 @@ def _meal_full(m: dict) -> Meal:
         **summary.model_dump(),
         diets=_pick(m, "dietary_tags", "diets", default=[]),
         allergens=_pick(m, "allergens", default=[]),
+        symptom_support=_pick(m, "symptom_support", "side_effect_support", default=[]),
         ingredients=_pick(m, "ingredients", default=[]),
         steps=_pick(m, "instructions", "steps", default=[]),
     )
@@ -168,6 +182,19 @@ async def get_suggestions(
         meals=[_meal_summary(m) for m in page],
         has_more=offset + limit < len(meals),
     )
+
+
+@router.get("/images/{filename}")
+async def get_recipe_image(filename: str):
+    """Serve a recipe photo from data/recipe/images/ (path-traversal safe)."""
+    path = (IMAGES_DIR / filename).resolve()
+    images_root = IMAGES_DIR.resolve()
+    # Reject traversal and missing files; only serve real images under the dir.
+    if images_root not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+    if path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path)
 
 
 @router.get("/{meal_id}", response_model=Meal)
