@@ -1,35 +1,25 @@
 """
 Recipe Routes
-Serves the recipe chatbot flow: diet/allergy config, allergy-filtered meal
-suggestions, and full recipes. Meal data is sourced from
-``data/recipe/meals.json`` so it can be edited without code changes.
+Serves the dashboard recipe flow: diet/allergy config, allergy-filtered meal
+suggestions, full recipes, and recipe photos.
+
+All recipe data comes from RecipeService (services/recipe_service.py). This
+module owns only the HTTP contract: request validation, paging, and the Pydantic
+response models the frontend depends on.
 """
 
-import json
 import logging
-from functools import lru_cache
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from services.agents.recipe_agent import get_recipe_agent
+from services.recipe_service import get_recipe_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes", tags=["Recipes"])
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "recipe"
-DATA_FILE = DATA_DIR / "meals.json"
-IMAGES_DIR = DATA_DIR / "images"
-
-# Per-(diet, allergies) cache of the full generated batch. Keeps pagination
-# stable across "Show more" calls and lets GET /recipes/{id} resolve generated
-# meals (which are not in the static catalogue).
-_SUGGESTION_CACHE: Dict[Tuple[str, Tuple[str, ...]], List[dict]] = {}
-_RECIPE_CACHE: Dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -70,72 +60,34 @@ class SuggestionsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Data loading (cached; the JSON is static at runtime)
+# Record -> response mapping (the HTTP contract; kept out of the service)
 # ---------------------------------------------------------------------------
-@lru_cache(maxsize=1)
-def _load_data() -> dict:
-    try:
-        with DATA_FILE.open(encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.error("Recipe data file not found at %s", DATA_FILE)
-        raise HTTPException(status_code=500, detail="Recipe data unavailable")
-    except json.JSONDecodeError as exc:
-        logger.error("Recipe data file is malformed: %s", exc)
-        raise HTTPException(status_code=500, detail="Recipe data unavailable")
-
-
-def _all_meals() -> List[dict]:
-    return _load_data().get("meals", [])
-
-
-# ---------------------------------------------------------------------------
-# Mapping: unified recipe record (recipes_full.json / OpenSearch) -> API models.
-# Readers stay tolerant of both unified field names and the legacy meals.json
-# names, so the frontend contract (MealSummary/Meal) never changes.
-# ---------------------------------------------------------------------------
-def _pick(m: dict, *keys, default=None):
-    for k in keys:
-        v = m.get(k)
-        if v not in (None, "", []):
-            return v
-    return default
-
-
-def _meal_id(m: dict) -> str:
-    return _pick(m, "recipe_id", "id", default="")
-
-
-def _image_path(m: dict) -> Optional[str]:
-    """Stored as e.g. "images/recipe-001.png"; expose as an API path the
-    frontend can fetch: /recipes/images/recipe-001.png."""
-    raw_image = _pick(m, "image")
-    return f"/recipes/{raw_image.lstrip('/')}" if raw_image else None
-
-
-def _meal_summary(m: dict) -> MealSummary:
-    nutrition = m.get("nutrition") or {}
-    calories = _pick(m, "calories") or nutrition.get("calories_per_serving") or 0
+def _to_summary(record: dict) -> MealSummary:
+    service = get_recipe_service()
+    nutrition = record.get("nutrition") or {}
+    calories = record.get("calories") or nutrition.get("calories_per_serving") or 0
     return MealSummary(
-        id=_meal_id(m),
-        name=_pick(m, "title", "name", default=""),
-        emoji=_pick(m, "emoji", default="🍽️"),
-        desc=_pick(m, "description", "desc", default=""),
-        time=_pick(m, "time", default=""),
+        id=service.recipe_id(record),
+        name=record.get("title") or record.get("name") or "",
+        emoji=record.get("emoji") or "🍽️",
+        desc=record.get("description") or record.get("desc") or "",
+        time=record.get("time") or "",
         calories=int(calories),
-        image=_image_path(m),
+        image=service.image_api_path(record),
     )
 
 
-def _meal_full(m: dict) -> Meal:
-    summary = _meal_summary(m)
+def _to_meal(record: dict) -> Meal:
+    service = get_recipe_service()
     return Meal(
-        **summary.model_dump(),
-        diets=_pick(m, "dietary_tags", "diets", default=[]),
-        allergens=_pick(m, "allergens", default=[]),
-        symptom_support=_pick(m, "symptom_support", "side_effect_support", default=[]),
-        ingredients=_pick(m, "ingredients", default=[]),
-        steps=_pick(m, "instructions", "steps", default=[]),
+        **_to_summary(record).model_dump(),
+        diets=service.diet_tags(record),
+        allergens=record.get("allergens") or [],
+        symptom_support=(
+            record.get("symptom_support") or record.get("side_effect_support") or []
+        ),
+        ingredients=record.get("ingredients") or [],
+        steps=record.get("instructions") or record.get("steps") or [],
     )
 
 
@@ -144,12 +96,11 @@ def _meal_full(m: dict) -> Meal:
 # ---------------------------------------------------------------------------
 @router.get("/config", response_model=RecipeConfig)
 async def get_recipe_config():
-    """Diet options and common allergies the chatbot offers the user."""
-    data = _load_data()
-    return RecipeConfig(
-        diet_options=data.get("diet_options", []),
-        common_allergies=data.get("common_allergies", []),
-    )
+    """Diet options and common allergies the recipe flow offers the user."""
+    config = get_recipe_service().get_config()
+    if not config["diet_options"]:
+        raise HTTPException(status_code=500, detail="Recipe data unavailable")
+    return RecipeConfig(**config)
 
 
 @router.get("/suggestions", response_model=SuggestionsResponse)
@@ -161,52 +112,34 @@ async def get_suggestions(
     offset: int = Query(0, ge=0, description="How many matches to skip (paging)"),
     limit: int = Query(3, ge=1, le=10),
 ):
-    """A page of `limit` meals for the diet that avoid every listed allergen.
+    """A page of `limit` recipes for the diet that avoid every listed allergen.
 
-    The RecipeAgent generates the batch (grounded in the catalogue, validated
-    for safety) on first request for a given (diet, allergies) pair; subsequent
-    pages are served from the cached batch so `offset` stays stable.
+    The service caches the batch per (diet, allergies), so `offset` stays stable
+    across "Show more" calls.
     """
     allergy_list = [a.strip() for a in (allergies or "").split(",") if a.strip()]
-    key = (diet.strip().lower(), tuple(sorted(a.lower() for a in allergy_list)))
+    matches = get_recipe_service().suggest(diet, allergy_list)
 
-    meals = _SUGGESTION_CACHE.get(key)
-    if meals is None:
-        meals = await get_recipe_agent().suggest_meals(diet.strip(), allergy_list)
-        _SUGGESTION_CACHE[key] = meals
-        for m in meals:
-            _RECIPE_CACHE[_meal_id(m)] = m
-
-    page = meals[offset : offset + limit]
+    page = matches[offset : offset + limit]
     return SuggestionsResponse(
-        meals=[_meal_summary(m) for m in page],
-        has_more=offset + limit < len(meals),
+        meals=[_to_summary(record) for record in page],
+        has_more=offset + limit < len(matches),
     )
 
 
 @router.get("/images/{filename}")
 async def get_recipe_image(filename: str):
     """Serve a recipe photo from data/recipe/images/ (path-traversal safe)."""
-    path = (IMAGES_DIR / filename).resolve()
-    images_root = IMAGES_DIR.resolve()
-    # Reject traversal and missing files; only serve real images under the dir.
-    if images_root not in path.parents or not path.is_file():
-        raise HTTPException(status_code=404, detail="Image not found")
-    if path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
+    path = get_recipe_service().image_file(filename)
+    if path is None:
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path)
 
 
 @router.get("/{meal_id}", response_model=Meal)
 async def get_recipe(meal_id: str):
-    """Full recipe (ingredients + method) for a chosen meal.
-
-    Resolves from the static catalogue first, then from agent-generated meals
-    cached during /suggestions.
-    """
-    for m in _all_meals():
-        if _meal_id(m) == meal_id:
-            return _meal_full(m)
-    if meal_id in _RECIPE_CACHE:
-        return _meal_full(_RECIPE_CACHE[meal_id])
-    raise HTTPException(status_code=404, detail="Recipe not found")
+    """Full recipe (ingredients + method) for a chosen meal."""
+    record = get_recipe_service().get_recipe(meal_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return _to_meal(record)
