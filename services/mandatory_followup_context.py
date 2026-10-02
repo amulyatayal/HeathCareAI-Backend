@@ -223,10 +223,24 @@ def _last_user_before_last_assistant(history: List[Dict[str, Any]]) -> Optional[
         return _last_user_content(history)
 
     for i in range(last_assistant_idx - 1, -1, -1):
-        if history[i].get("role") == "user":
-            text = (history[i].get("content") or "").strip()
-            return text or None
+        if history[i].get("role") != "user":
+            continue
+        # A user turn that answered one of our mandatory prompts ("70 kg",
+        # "no change") is a measurement reply, not the question. Keep walking
+        # back until we reach a turn that was not replying to a prompt.
+        if _replied_to_mandatory_prompt(history, i):
+            continue
+        text = (history[i].get("content") or "").strip()
+        return text or None
     return None
+
+
+def _replied_to_mandatory_prompt(history: List[Dict[str, Any]], user_idx: int) -> bool:
+    """True when the assistant turn just before ``user_idx`` asked for mandatory fields."""
+    for i in range(user_idx - 1, -1, -1):
+        if history[i].get("role") == "assistant":
+            return _assistant_asked_for_mandatory_fields(history[i].get("content") or "")
+    return False
 
 
 def _assistant_asked_for_mandatory_fields(assistant_text: str) -> bool:
