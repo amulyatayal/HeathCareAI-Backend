@@ -131,7 +131,7 @@ class ModelType(str, Enum):
 
 # Model ID mapping for AWS Bedrock (cross-region inference profiles)
 MODEL_IDS = {
-    ModelType.FAST: "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+    ModelType.FAST: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     ModelType.ACCURATE: "us.anthropic.claude-sonnet-4-6",
 }
 
