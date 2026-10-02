@@ -111,7 +111,6 @@ HeathCareAI-Backend/
 │       └── validator_agent.py
 ├── services/metrics.py     # structured metrics (log-based)
 ├── knowledge_base/         # KB management utilities
-├── utils/                  # Helper functions
 ├── data/                   # Sample data and documents
 ├── logs/                   # Application logs
 ├── main.py                 # FastAPI application entry
