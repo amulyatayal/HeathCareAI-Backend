@@ -1,0 +1,205 @@
+{
+  "diet_options": [
+    { "value": "Vegetarian", "emoji": "🥗", "desc": "No meat or fish" },
+    { "value": "Non-Vegetarian", "emoji": "🍗", "desc": "Includes meat & fish" },
+    { "value": "Vegan", "emoji": "🌱", "desc": "No animal products" }
+  ],
+  "common_allergies": ["Dairy", "Nuts", "Gluten", "Eggs", "Soy", "Shellfish", "Fish"],
+  "meals": [
+    {
+      "id": "paneer-bowl",
+      "name": "Paneer & Quinoa Power Bowl",
+      "emoji": "🥘",
+      "diets": ["Vegetarian"],
+      "allergens": ["Dairy"],
+      "desc": "Protein-rich bowl with spiced paneer and fresh greens",
+      "time": "25 min",
+      "calories": 480,
+      "ingredients": [
+        "200g paneer, cubed",
+        "1 cup cooked quinoa",
+        "1 cup baby spinach",
+        "1/2 cup cherry tomatoes",
+        "1 tsp cumin",
+        "1 tbsp olive oil",
+        "Salt & pepper"
+      ],
+      "steps": [
+        "Heat olive oil in a pan over medium heat.",
+        "Add cumin, then paneer cubes; sear until golden.",
+        "Toss in tomatoes and spinach until just wilted.",
+        "Serve over warm quinoa, season to taste."
+      ]
+    },
+    {
+      "id": "chickpea-curry",
+      "name": "Coconut Chickpea Curry",
+      "emoji": "🍛",
+      "diets": ["Vegetarian", "Vegan"],
+      "allergens": [],
+      "desc": "Creamy, fragrant curry with chickpeas and coconut milk",
+      "time": "30 min",
+      "calories": 420,
+      "ingredients": [
+        "1 can chickpeas, drained",
+        "1 can coconut milk",
+        "1 onion, diced",
+        "2 cloves garlic",
+        "1 tbsp curry powder",
+        "1 cup spinach",
+        "Rice to serve"
+      ],
+      "steps": [
+        "Sauté onion and garlic until soft.",
+        "Stir in curry powder for 30 seconds.",
+        "Add chickpeas and coconut milk; simmer 15 min.",
+        "Fold in spinach, serve over rice."
+      ]
+    },
+    {
+      "id": "tofu-stirfry",
+      "name": "Crispy Tofu Stir-Fry",
+      "emoji": "🍜",
+      "diets": ["Vegetarian", "Vegan"],
+      "allergens": ["Soy"],
+      "desc": "Quick wok-tossed tofu with crunchy vegetables",
+      "time": "20 min",
+      "calories": 390,
+      "ingredients": [
+        "200g firm tofu, cubed",
+        "2 cups mixed vegetables",
+        "2 tbsp soy sauce",
+        "1 tsp ginger, grated",
+        "1 tbsp sesame oil",
+        "1 clove garlic"
+      ],
+      "steps": [
+        "Pan-fry tofu until crisp on all sides.",
+        "Remove tofu, stir-fry vegetables with garlic and ginger.",
+        "Return tofu, add soy sauce and sesame oil.",
+        "Toss 2 minutes and serve hot."
+      ]
+    },
+    {
+      "id": "lentil-soup",
+      "name": "Hearty Red Lentil Soup",
+      "emoji": "🍲",
+      "diets": ["Vegetarian", "Vegan"],
+      "allergens": [],
+      "desc": "Warming, fiber-rich soup, gentle on the stomach",
+      "time": "35 min",
+      "calories": 310,
+      "ingredients": [
+        "1 cup red lentils",
+        "1 carrot, diced",
+        "1 onion, diced",
+        "4 cups vegetable stock",
+        "1 tsp turmeric",
+        "1 tbsp olive oil",
+        "Lemon to serve"
+      ],
+      "steps": [
+        "Sauté onion and carrot in olive oil.",
+        "Add turmeric, lentils and stock.",
+        "Simmer 25 minutes until lentils break down.",
+        "Blend lightly, finish with a squeeze of lemon."
+      ]
+    },
+    {
+      "id": "grilled-chicken",
+      "name": "Lemon Herb Grilled Chicken",
+      "emoji": "🍗",
+      "diets": ["Non-Vegetarian"],
+      "allergens": [],
+      "desc": "Lean grilled chicken with a bright herb marinade",
+      "time": "30 min",
+      "calories": 450,
+      "ingredients": [
+        "2 chicken breasts",
+        "1 lemon, juiced",
+        "2 tbsp olive oil",
+        "1 tsp dried oregano",
+        "2 cloves garlic",
+        "Side salad"
+      ],
+      "steps": [
+        "Whisk lemon, oil, oregano and garlic.",
+        "Marinate chicken 15 minutes.",
+        "Grill 6-7 minutes per side until cooked through.",
+        "Rest 5 minutes, serve with salad."
+      ]
+    },
+    {
+      "id": "salmon-bowl",
+      "name": "Teriyaki Salmon Rice Bowl",
+      "emoji": "🐟",
+      "diets": ["Non-Vegetarian"],
+      "allergens": ["Fish", "Soy"],
+      "desc": "Omega-3 rich salmon glazed and served over rice",
+      "time": "25 min",
+      "calories": 520,
+      "ingredients": [
+        "1 salmon fillet",
+        "2 tbsp teriyaki sauce",
+        "1 cup cooked rice",
+        "1/2 avocado",
+        "Steamed broccoli",
+        "Sesame seeds"
+      ],
+      "steps": [
+        "Brush salmon with teriyaki sauce.",
+        "Pan-sear 4 minutes per side.",
+        "Plate over rice with avocado and broccoli.",
+        "Sprinkle sesame seeds and serve."
+      ]
+    },
+    {
+      "id": "turkey-wrap",
+      "name": "Mediterranean Turkey Wrap",
+      "emoji": "🌯",
+      "diets": ["Non-Vegetarian"],
+      "allergens": ["Gluten", "Dairy"],
+      "desc": "Light wrap with lean turkey, hummus and crisp veg",
+      "time": "15 min",
+      "calories": 410,
+      "ingredients": [
+        "Whole-wheat tortilla",
+        "120g sliced turkey",
+        "2 tbsp hummus",
+        "Cucumber & tomato",
+        "Feta cheese",
+        "Mixed greens"
+      ],
+      "steps": [
+        "Spread hummus over the tortilla.",
+        "Layer turkey, vegetables and feta.",
+        "Add greens and roll tightly.",
+        "Slice in half and serve."
+      ]
+    },
+    {
+      "id": "veggie-buddha",
+      "name": "Roasted Veggie Buddha Bowl",
+      "emoji": "🥦",
+      "diets": ["Vegetarian", "Vegan"],
+      "allergens": [],
+      "desc": "Colorful roasted vegetables over grains with tahini",
+      "time": "40 min",
+      "calories": 440,
+      "ingredients": [
+        "1 sweet potato, cubed",
+        "1 cup chickpeas",
+        "1 cup cooked brown rice",
+        "2 tbsp tahini",
+        "1 tbsp olive oil",
+        "Kale, chopped"
+      ],
+      "steps": [
+        "Roast sweet potato and chickpeas at 200°C for 25 min.",
+        "Massage kale with a little olive oil.",
+        "Assemble rice, roasted veg and kale.",
+        "Drizzle with tahini and serve."
+      ]
+    }
+  ]
+}

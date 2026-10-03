@@ -23,12 +23,28 @@ from config import settings
 # v1 API routes (deprecated - single agent)
 from api import chat_router, knowledge_router, health_router, categories_router, forum_router
 # v2 API routes (new - multi-agent pipeline)
-from api import pipeline_router, health_v2_router, debug_router, profile_router, me_router
+from api import (
+    pipeline_router,
+    health_v2_router,
+    debug_router,
+    profile_router,
+    document_router,
+    me_router,
+)
 # v2 Admin portal & patient resources
 from api import admin_router, resource_router
 # v2 Patient tracking & dashboard
-from api import mood_router, symptom_router, appointment_router, dashboard_router, notification_router
-from api import patient_consent_router, patient_grievance_router, patient_share_router, event_router, clinical_team_router
+from api import (
+    patient_biomarkers_router,
+    mood_router,
+    symptom_router,
+    appointment_router,
+    dashboard_router,
+    notification_router,
+)
+from api import patient_consent_router, patient_grievance_router, patient_share_router
+from api import recipe_router, event_router, clinical_team_router
+from api.test_auth_routes import router as test_auth_router
 
 # ================================
 # Logging Configuration
@@ -174,6 +190,7 @@ app.include_router(knowledge_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(categories_router, prefix="/api/v1")
 app.include_router(forum_router, prefix="/api/v1")
+app.include_router(test_auth_router, prefix="/api/v1")
 
 # API v2 routes (new - multi-agent pipeline)
 # Prefix: /api/v2
@@ -181,6 +198,7 @@ app.include_router(pipeline_router, prefix="/api/v2")
 app.include_router(health_v2_router, prefix="/api/v2")
 app.include_router(debug_router, prefix="/api/v2")
 app.include_router(profile_router, prefix="/api/v2")
+app.include_router(document_router, prefix="/api/v2")
 app.include_router(me_router, prefix="/api/v2")
 
 # Admin portal & patient resources
@@ -188,6 +206,7 @@ app.include_router(admin_router, prefix="/api/v2/admin")
 app.include_router(resource_router, prefix="/api/v2")
 
 # Patient tracking & dashboard
+app.include_router(patient_biomarkers_router, prefix="/api/v2")
 app.include_router(mood_router, prefix="/api/v2")
 app.include_router(symptom_router, prefix="/api/v2")
 app.include_router(appointment_router, prefix="/api/v2")
@@ -196,6 +215,7 @@ app.include_router(notification_router, prefix="/api/v2")
 app.include_router(patient_consent_router, prefix="/api/v2")
 app.include_router(patient_grievance_router, prefix="/api/v2")
 app.include_router(patient_share_router, prefix="/api/v2")
+app.include_router(recipe_router, prefix="/api/v2")
 app.include_router(event_router, prefix="/api/v2")
 app.include_router(clinical_team_router, prefix="/api/v2")
 
@@ -247,7 +267,7 @@ if __name__ == "__main__":
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
-        reload_dirs=["api", "config", "models", "services", "utils"] if settings.debug else None,
+        reload_dirs=["api", "config", "models", "services"] if settings.debug else None,
         log_level=settings.log_level.lower()
     )
 

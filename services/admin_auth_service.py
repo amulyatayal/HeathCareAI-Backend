@@ -11,9 +11,9 @@ from typing import Optional
 
 import bcrypt
 import jwt
-import boto3
 from botocore.exceptions import ClientError
 
+from config.aws import get_dynamodb_resource
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class AdminAuthService:
     TABLE_NAME = "AdminUsers"
     
     def __init__(self):
-        self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.TABLE_NAME)
     
     # ================================

@@ -1,0 +1,819 @@
+{
+  "$schema_version": "1.0",
+  "purpose": "Exhaustive, citation-rich knowledge base extracted from the ESPEN guidelines on nutrition in cancer patients (2017). Designed to be consumed by a reasoning agent that takes patient parameters (age, sex, weight, height, BMI, % weight loss, waist circumference, hand-grip strength, body composition, performance status, CRP, albumin, cancer type, treatment, comorbidities) and derives an evidence-based energy / protein / substrate / micronutrient / route-of-feeding plan with verbatim source citations.",
+  "how_to_use": {
+    "agent_workflow": [
+      "1. Validate that mandatory inputs (age, sex, weight, height, BMI, weight history, cancer type/stage, treatment phase, kidney function, performance status) are present using `assessment_inputs.mandatory_inputs`.",
+      "2. Run nutrition risk screening per `screening.tools` and decide whether to escalate to full assessment (`assessment.domains`).",
+      "3. Detect malnutrition / sarcopenia / cachexia using thresholds in `assessment.muscle_mass_thresholds`, `assessment.weight_loss_BMI_grading`, `assessment.handgrip_thresholds`, `assessment.waist_circumference_thresholds`.",
+      "4. Estimate Total Energy Expenditure with `energy_requirements.calculation_methods` (preferred order: indirect calorimetry > Harris-Benedict/Schofield REE x PAL > 25-30 kcal/kg/day rule of thumb).",
+      "5. Derive protein target from `protein_requirements.decision_rules` (kidney function & inflammation-adjusted).",
+      "6. Pick macronutrient split using `macronutrient_composition.decision_rules` (insulin-resistance / cachexia adjustment).",
+      "7. Choose feeding route via `intervention_decision_logic.feeding_route_algorithm`.",
+      "8. Layer subgroup-specific overrides from `patient_subgroups.<group>` (surgery, RT, CHT, HCT, advanced cancer, survivors, terminal).",
+      "9. Apply safety guards in `safety.refeeding_syndrome` and `safety.contraindications`.",
+      "10. When responding to the user, cite each numeric/textual claim using the `citation` field on the relevant object."
+    ],
+    "citation_field_format": "Every clinical claim carries a `citation` object: { recommendation_id, espen_section, page_in_journal, page_in_pdf, supporting_references_in_paper, strength_of_recommendation, level_of_evidence }. The agent should render citations to the end-user as e.g. 'ESPEN 2017, recommendation B2-1 (Strong, Low evidence), Clin Nutr 36:20'."
+  },
+
+  "document_metadata": {
+    "title": "ESPEN guidelines on nutrition in cancer patients",
+    "lead_author": "Jann Arends",
+    "co_authors": [
+      "Patrick Bachmann", "Vickie Baracos", "Nicole Barthelemy", "Hartmut Bertz",
+      "Federico Bozzetti", "Ken Fearon", "Elisabeth Hütterer", "Elizabeth Isenring",
+      "Stein Kaasa", "Zeljko Krznaric", "Barry Laird", "Maria Larsson",
+      "Alessandro Laviano", "Stefan Mühlebach", "Maurizio Muscaritoli",
+      "Line Oldervoll", "Paula Ravasco", "Tora Solheim", "Florian Strasser",
+      "Marian de van der Schueren", "Jean-Charles Preiser"
+    ],
+    "journal": "Clinical Nutrition",
+    "publisher": "Elsevier",
+    "year": 2017,
+    "volume": 36,
+    "issue": null,
+    "pages": "11-48",
+    "doi": "10.1016/j.clnu.2016.07.015",
+    "url": "https://doi.org/10.1016/j.clnu.2016.07.015",
+    "received": "2016-07-21",
+    "accepted": "2016-07-28",
+    "endorsed_by": [
+      "European Society of Surgical Oncology (ESSO)",
+      "European Association for Palliative Care (EAPC)",
+      "Chinese Society of Clinical Oncology (CSCO)"
+    ],
+    "commissioned_by": [
+      "European Society for Clinical Nutrition and Metabolism (ESPEN)",
+      "European Partnership for Action Against Cancer (EPAAC)"
+    ],
+    "method": "PICO-format clinical questions; PubMed/Cochrane search Jan 2006 – Jun 2013 (6,600 records); GRADE for evidence appraisal; Delphi consensus; external review on espen.org Aug 2015 (145 responses).",
+    "consensus_summary": {
+      "total_recommendations": 44,
+      "strong_consensus": 24,
+      "consensus": 20,
+      "minimum_agreement_pct": 75
+    },
+    "preferred_citation_short": "ESPEN 2017",
+    "preferred_citation_full": "Arends J, Bachmann P, Baracos V, et al. ESPEN guidelines on nutrition in cancer patients. Clin Nutr. 2017;36(1):11-48. doi:10.1016/j.clnu.2016.07.015"
+  },
+
+  "definitions": {
+    "cancer_patient": {
+      "definition": "A patient with a cancer diagnosis who is either waiting for or on cancer-directed treatment, on symptomatic treatment, and/or receiving palliative care.",
+      "citation": { "espen_section": "O1.1 / Chapter A", "page_in_journal": 12, "page_in_pdf": "2-3 of 38" }
+    },
+    "cancer_survivor": {
+      "definition": "Patients cured from their cancer.",
+      "citation": { "espen_section": "O1.1", "page_in_journal": 12, "page_in_pdf": "2 of 38" }
+    },
+    "pharmaconutrients": {
+      "definition": "Nutrients supplied in pharmacological doses to modulate immune and metabolic functions and exert effects on clinical outcome.",
+      "citation": { "espen_section": "O1.1", "page_in_journal": 12, "page_in_pdf": "2 of 38" }
+    },
+    "malnutrition_in_cancer": {
+      "definition": "Negative energy balance and skeletal muscle loss driven by a combination of reduced food intake AND metabolic derangements (elevated REE, insulin resistance, lipolysis, proteolysis aggravated by systemic inflammation and host/tumor-derived catabolic factors). Cannot be fully reversed by conventional nutrition support alone.",
+      "citation": { "espen_section": "Chapter A intro", "page_in_journal": 17, "page_in_pdf": "7 of 38", "supporting_references_in_paper": [21, 22, 23, 24] }
+    },
+    "inadequate_food_intake": {
+      "operational_definition": "A patient cannot eat for more than 1 week OR estimated energy intake is < 60% of requirement for more than 1–2 weeks.",
+      "use_as_trigger_for": "Initiating artificial (enteral or parenteral) nutrition.",
+      "citation": { "espen_section": "A1 statement 1", "page_in_journal": 17, "page_in_pdf": "7 of 38", "supporting_references_in_paper": [6, 7] }
+    },
+    "cachexia": {
+      "informal_description": "Multifactorial syndrome of ongoing loss of skeletal muscle (with or without fat loss) that cannot be fully reversed by conventional nutritional support and leads to progressive functional impairment.",
+      "note": "ESPEN 2017 deliberately avoids declaring 'sarcopenia / pre-cachexia / refractory cachexia' as operational; instead grades the underlying components (inflammation, anorexia, intake, muscle/fat depletion, activity).",
+      "citation": { "espen_section": "Chapter A intro", "page_in_journal": 17, "page_in_pdf": "7 of 38", "supporting_references_in_paper": [21, 22] }
+    },
+    "REE": "Resting Energy Expenditure",
+    "TEE": "Total Energy Expenditure",
+    "PAL": "Physical Activity Level (TEE / REE)",
+    "BMI": "Body Mass Index = weight(kg) / height(m)^2",
+    "mGPS": "modified Glasgow Prognostic Score",
+    "PG-SGA": "Patient-Generated Subjective Global Assessment",
+    "MUST": "Malnutrition Universal Screening Tool",
+    "NRS-2002": "Nutrition Risk Screening 2002",
+    "MST": "Malnutrition Screening Tool",
+    "MNA-SF": "Mini Nutritional Assessment Short Form",
+    "ECOG": "Eastern Cooperative Oncology Group performance scale (0 = normal … 4 = bedbound)",
+    "ERAS": "Enhanced Recovery After Surgery",
+    "ONS": "Oral Nutritional Supplements",
+    "EN": "Enteral Nutrition",
+    "PN": "Parenteral Nutrition",
+    "HPN": "Home Parenteral Nutrition",
+    "HCT": "Hematopoietic stem-Cell Transplantation"
+  },
+
+  "assessment_inputs": {
+    "mandatory_inputs": [
+      { "field": "age_years", "type": "number", "rationale": "Anabolic resistance increases with age." },
+      { "field": "sex", "type": "enum[male,female]", "rationale": "Sex-specific cut-offs for muscle mass and waist circumference." },
+      { "field": "weight_kg", "type": "number", "rationale": "Drives kcal/kg and g protein/kg calculations; correct for excessive fluid (ascites, edema, pleural effusion)." },
+      { "field": "height_cm", "type": "number" },
+      { "field": "BMI", "type": "number_kg_m2", "derived_from": "weight_kg / (height_m)^2" },
+      { "field": "percent_weight_loss_6mo", "type": "number_pct", "rationale": "Combined with BMI defines Martin grading of survival risk." },
+      { "field": "cancer_type", "type": "enum", "examples": ["lung", "head_and_neck", "GI_upper", "GI_lower", "pancreas", "hematologic", "breast", "other"] },
+      { "field": "cancer_stage", "type": "string" },
+      { "field": "treatment_phase", "type": "enum", "values": ["pre-treatment", "curative_surgery", "curative_RT", "curative_CHT", "palliative_CHT", "HCT", "advanced_no_treatment", "survivor", "terminal"] },
+      { "field": "kidney_function", "type": "enum[normal,acute_failure,chronic_failure]", "rationale": "Caps protein dose." },
+      { "field": "performance_status_ECOG", "type": "integer_0_to_4" }
+    ],
+    "highly_recommended_inputs": [
+      { "field": "handgrip_strength_kg", "rationale": "Functional surrogate of muscle status; tracked over time." },
+      { "field": "waist_circumference_cm", "rationale": "Central adiposity marker; useful in survivors and obese patients." },
+      { "field": "mid_upper_arm_muscle_area_cm2", "rationale": "Anthropometric muscle mass proxy with sex-specific 5th-percentile cut-offs." },
+      { "field": "DEXA_appendicular_SMI_kg_m2", "rationale": "Severe muscle depletion threshold." },
+      { "field": "CT_lumbar_L3_SMI_cm2_m2", "rationale": "Routine oncology imaging-based muscle assessment." },
+      { "field": "BIA_FFMI_kg_m2", "rationale": "Bedside whole-body fat-free mass index." },
+      { "field": "CRP_mg_L", "rationale": "Inflammation; component of mGPS." },
+      { "field": "albumin_g_L", "rationale": "Component of mGPS; surgical-risk marker." },
+      { "field": "current_energy_intake_kcal_per_day", "rationale": "Triggers escalation if < 60% of requirement >1–2 weeks." },
+      { "field": "nutrition_impact_symptoms", "type": "list", "values": ["anorexia", "early_satiety", "dysphagia", "nausea", "vomiting", "mucositis", "xerostomia", "taste_alteration", "diarrhea", "constipation", "malabsorption", "pain"] },
+      { "field": "physical_activity_level_PAL", "type": "number", "rationale": "Used to convert REE to TEE." }
+    ],
+    "citation": { "espen_section": "B1-1, B1-2", "page_in_journal": 19, "page_in_pdf": "9 of 38", "strength_of_recommendation": "STRONG", "level_of_evidence": "Very low" }
+  },
+
+  "screening": {
+    "recommendation": {
+      "id": "B1-1",
+      "text": "To detect nutritional disturbances at an early stage, regularly evaluate nutritional intake, weight change and BMI, beginning with cancer diagnosis and repeated depending on the stability of the clinical situation.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Very low",
+      "citation": { "espen_section": "B1-1", "page_in_journal": 19, "page_in_pdf": "9 of 38" }
+    },
+    "tools": [
+      { "name": "NRS-2002", "scope": "Hospital adults", "citation_ref_paper": [39] },
+      { "name": "MUST",     "scope": "Adults (community/hospital)", "citation_ref_paper": [39] },
+      { "name": "MST",      "scope": "Adults", "citation_ref_paper": [39] },
+      { "name": "MNA-SF (revised)", "scope": "Older adults", "citation_ref_paper": [39] }
+    ],
+    "minimum_data_collected": ["BMI", "recent_weight_change", "index_of_food_intake"],
+    "frequency": "From cancer diagnosis onwards; repeat depending on stability of the clinical situation.",
+    "citation": { "espen_section": "B1-1 commentary", "page_in_journal": 19, "page_in_pdf": "9 of 38", "supporting_references_in_paper": [25, 36, 37, 38, 39, 40, 41, 42, 43] }
+  },
+
+  "assessment": {
+    "recommendation": {
+      "id": "B1-2",
+      "text": "In patients with abnormal screening, perform objective and quantitative assessment of nutritional intake, nutrition impact symptoms, muscle mass, physical performance and the degree of systemic inflammation.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Very low",
+      "citation": { "espen_section": "B1-2", "page_in_journal": 19, "page_in_pdf": "9 of 38" }
+    },
+    "domains": [
+      "dietary_intake",
+      "body_composition (muscle and fat reserves)",
+      "physical_activity / performance",
+      "metabolic_pattern (especially systemic inflammation)"
+    ],
+    "intake_methods": ["food and fluid records", "24-h diet history", "food recalls", "visual/verbal analogue scales"],
+    "body_composition_methods": [
+      { "method": "DEXA (dual X-ray absorptiometry)", "note": "Reference for appendicular SMI." },
+      { "method": "Anthropometry (mid upper-arm muscle area)" },
+      { "method": "CT scan at L3 vertebral level", "note": "Routine oncologic imaging can be repurposed." },
+      { "method": "Bioelectrical Impedance Analysis (BIA)", "note": "Whole-body fat-free mass." }
+    ],
+    "performance_scales": [
+      { "name": "WHO/ECOG", "range": "0 (normal) - 4 (bed-bound)", "citation_ref_paper": [55] },
+      { "name": "Karnofsky Performance Scale", "range": "0 - 100", "citation_ref_paper": [56] }
+    ],
+    "fluid_correction": "Body weight should be corrected for excessive fluid loads (pleural effusion, ascites, edema) before computing kcal/kg or g protein/kg.",
+    "muscle_mass_thresholds_severe_depletion": {
+      "general_definition": "Absolute muscularity below the 5th percentile.",
+      "thresholds": [
+        { "method": "Mid upper-arm muscle area (anthropometry)", "men_below_cm2": 32, "women_below_cm2": 18 },
+        { "method": "Appendicular skeletal muscle index by DEXA",  "men_below_kg_m2": 7.26, "women_below_kg_m2": 5.45 },
+        { "method": "Lumbar (L3) skeletal muscle index by CT",     "men_below_cm2_m2": 55,  "women_below_cm2_m2": 39 },
+        { "method": "Whole-body fat-free mass index by BIA (no bone)", "men_below_kg_m2": 14.6, "women_below_kg_m2": 11.4 }
+      ],
+      "clinical_significance": "Strongly associated with mortality, post-operative complications, and dose-limiting toxicity of systemic anticancer therapy. Must drive aggressive nutritional + physical-therapy interventions.",
+      "citation": { "espen_section": "A1 statement 2", "page_in_journal": "17-18", "page_in_pdf": "7-8 of 38", "supporting_references_in_paper": [26, 27] }
+    },
+    "weight_loss_BMI_grading_for_survival_prognosis_Martin_2015": {
+      "description": "Grading scheme combining current BMI and % weight loss to predict overall survival in advanced cancer (Grade 0 = best, Grade 4 = worst). Adjusted for age, sex, disease site, stage, performance status (p<0.001).",
+      "grades": [
+        { "grade": 0, "interpretation": "Best prognosis (longest median survival)" },
+        { "grade": 1 }, { "grade": 2 }, { "grade": 3 },
+        { "grade": 4, "interpretation": "Worst prognosis (shortest median survival)" }
+      ],
+      "general_rule": "Lower BMI combined with greater % weight loss → higher grade → shorter survival. Both BMI and weight loss are independent predictors.",
+      "agent_action": "If a patient is grade 3-4, prioritize early aggressive nutritional + metabolic intervention and mobilization; clearly communicate prognostic implications to the care team.",
+      "citation": { "espen_section": "Fig. 2 (A1) and A1 statement 1", "page_in_journal": 18, "page_in_pdf": "8 of 38", "supporting_references_in_paper": [25] }
+    },
+    "handgrip_thresholds": {
+      "use": "Repeated dynamometer hand-grip strength is recommended as a functional muscle assessment to monitor response to nutrition/exercise.",
+      "specific_cutoffs_in_ESPEN_2017": "ESPEN 2017 recommends measurement of muscle function (e.g. dynamometers) but does NOT publish absolute cancer-specific cut-offs; agent should track within-patient trend and use age/sex norms (e.g. EWGSOP/Fried criteria) externally.",
+      "citation": { "espen_section": "B1-2 commentary, C4-1 commentary", "page_in_journal": "19, 35", "page_in_pdf": "9, 25 of 38" }
+    },
+    "waist_circumference_thresholds": {
+      "use_in_ESPEN_2017": "Mentioned only indirectly: ESPEN 2017 recommends maintaining BMI 18.5–25 kg/m² and a healthy lifestyle in survivors (C5-2). For waist-circumference cut-offs ESPEN defers to general WHO/IDF metabolic-syndrome thresholds (men ≥94 cm at-risk / ≥102 cm increased-risk; women ≥80 / ≥88 cm).",
+      "agent_action": "Treat large waist as a marker of central adiposity → in survivors trigger physical-activity and energy-balance counselling per C5-1/C5-2; in advanced cachexia obesity does not exclude sarcopenia ('sarcopenic obesity'), so still measure muscle mass.",
+      "citation": { "espen_section": "C5-2", "page_in_journal": 37, "page_in_pdf": "27 of 38", "supporting_references_in_paper": [124, 432, 436] }
+    },
+    "inflammation_grading": {
+      "tool": "modified Glasgow Prognostic Score (mGPS)",
+      "components": ["serum CRP (mg/L)", "serum albumin (g/L)"],
+      "clinical_significance": "Highly predictive of morbidity and mortality in cancer patients; used in ESPEN to gauge metabolic derangement severity.",
+      "ESPEN_threshold_used_in_advanced_cancer": "CRP < 10 mg/dL (i.e. 100 mg/L) suggests low tumor activity / no inflammatory reaction → patient more likely to benefit from full nutritional support.",
+      "citation": { "espen_section": "B1-2 commentary, C6-2 commentary", "page_in_journal": "19, 38", "page_in_pdf": "9, 28 of 38", "supporting_references_in_paper": [37, 454] }
+    },
+    "additional_catabolic_factors_to_assess": ["pain", "fatigue", "constipation", "nausea/vomiting", "psychological distress"],
+    "citation_general": { "espen_section": "B1-2 commentary", "page_in_journal": 19, "page_in_pdf": "9 of 38" }
+  },
+
+  "energy_requirements": {
+    "primary_recommendation": {
+      "id": "B2-1",
+      "text": "We recommend that total energy expenditure of cancer patients, if not measured individually, be assumed to be similar to healthy subjects and generally ranging between 25 and 30 kcal/kg/day.",
+      "default_range_kcal_per_kg_per_day": { "min": 25, "max": 30 },
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B2-1", "page_in_journal": 20, "page_in_pdf": "10 of 38", "supporting_references_in_paper": [6, 7, 64, 70, 71] }
+    },
+    "calculation_methods": [
+      {
+        "rank": 1,
+        "method": "Indirect calorimetry (gold standard)",
+        "use_when": "Available; especially in obese, severely malnourished, ICU, or atypical metabolic patients where rule-of-thumb is unreliable.",
+        "citation": { "espen_section": "B2-1 commentary", "page_in_journal": 20, "page_in_pdf": "10 of 38" }
+      },
+      {
+        "rank": 2,
+        "method": "Predicted REE × PAL",
+        "REE_formulas_acceptable": ["WHO/FAO/UNU 1985", "Schofield 1985", "Harris-Benedict"],
+        "PAL_factors_typical": { "bedridden_or_very_low_activity": 1.2, "sedentary_or_light_activity": 1.3, "moderate_activity": 1.5, "active": 1.7 },
+        "citation_for_PAL_use": { "espen_section": "B2-1 commentary", "page_in_journal": 20, "page_in_pdf": "10 of 38", "supporting_references_in_paper": [64, 70, 71] }
+      },
+      {
+        "rank": 3,
+        "method": "Rule-of-thumb 25–30 kcal/kg/day",
+        "caveats": [
+          "Will OVERestimate TEE in obese patients (use ideal/adjusted body weight or aim closer to 25 kcal/kg).",
+          "Will UNDERestimate TEE in severely malnourished patients (aim toward 30 kcal/kg or higher and reassess by weight/muscle response)."
+        ],
+        "citation": { "espen_section": "B2-1 commentary", "page_in_journal": 20, "page_in_pdf": "10 of 38", "supporting_references_in_paper": [6, 7] }
+      }
+    ],
+    "REE_in_cancer": {
+      "summary": "REE is unchanged in ~50%, increased >10% in ~25%, decreased >10% in ~25% of cancer patients vs predicted; direction not predictable for an individual case.",
+      "by_tumor_type": [
+        { "tumor": "gastric / colorectal", "REE": "usually normal" },
+        { "tumor": "pancreatic / lung",    "REE": "frequently elevated; correlates with systemic inflammation" }
+      ],
+      "treatment_effects": "Effective chemotherapy in inflammation-driven (e.g. SCLC) tumors can reduce REE alongside reduction in inflammatory mediators.",
+      "citation": { "espen_section": "B2 'Resting energy expenditure'", "page_in_journal": 20, "page_in_pdf": "10 of 38", "supporting_references_in_paper": [58, 59, 60, 61, 62, 63, 64, 65, 66, 67] }
+    },
+    "TEE_in_cancer": {
+      "summary": "Despite often elevated REE, TEE in advanced cancer is frequently LOWER than healthy predictions because of reduced physical activity. SenseWear-armband data: weight-stable leukemic patients ≈ 24 kcal/kg/day; weight-losing bedridden GI tumor patients ≈ 28 kcal/kg/day.",
+      "implication": "Do not chronically over-feed; small persistent positive imbalance still drives weight loss; monitor body weight and muscle mass and titrate.",
+      "citation": { "espen_section": "B2 'Total energy expenditure'", "page_in_journal": 20, "page_in_pdf": "10 of 38", "supporting_references_in_paper": [64, 65, 68, 69] }
+    },
+    "monitoring_and_titration": {
+      "rule": "Subsequently adapt energy provision according to clinical effects on body weight and muscle mass.",
+      "citation": { "espen_section": "B2-1 commentary", "page_in_journal": "20-21", "page_in_pdf": "10-11 of 38", "supporting_references_in_paper": [70, 71] }
+    },
+    "agent_decision_rules_for_energy_target": [
+      { "if": "indirect calorimetry available", "then": "use measured REE × PAL" },
+      { "if": "BMI 18.5–25 and ECOG 0–2 and no severe inflammation", "then": "target 25–30 kcal/kg actual body weight" },
+      { "if": "BMI > 30 (obese)", "then": "use 22–25 kcal/kg adjusted body weight; do NOT use raw 30 kcal/kg actual weight (overfeeding risk)" },
+      { "if": "severe malnutrition (BMI < 18.5 or weight loss > 10–15%)", "then": "see safety.refeeding_syndrome; start LOW (5–10 kcal/kg/day if depletion is severe), increase over 4–7 days, ultimately aim 30 kcal/kg" },
+      { "if": "ECOG 3–4 / bedridden weight-losing GI tumor", "then": "target ~24–28 kcal/kg/day initially, then titrate" },
+      { "if": "active cytostatic CHT for inflammatory tumors (e.g. SCLC, pancreas, lung)", "then": "expect REE to fall with response; reassess after each cycle" }
+    ]
+  },
+
+  "protein_requirements": {
+    "primary_recommendation": {
+      "id": "B2-2",
+      "text": "Protein intake should be above 1 g/kg/day and, if possible, up to 1.5 g/kg/day.",
+      "minimum_g_per_kg_per_day": 1.0,
+      "target_g_per_kg_per_day": 1.5,
+      "expert_range_in_text_g_per_kg_per_day": { "min": 1.2, "max": 2.0 },
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Moderate",
+      "citation": { "espen_section": "B2-2", "page_in_journal": 21, "page_in_pdf": "11 of 38", "supporting_references_in_paper": [73, 74, 75, 76, 78, 79, 84, 85, 86] }
+    },
+    "decision_rules": [
+      { "if": "normal kidney function", "target_g_per_kg_per_day": "1.2 – 1.5 (up to 2.0 considered safe)", "citation_ref_paper": [87] },
+      { "if": "acute renal failure (no dialysis)", "max_g_per_kg_per_day": 1.0, "citation_ref_paper": [88] },
+      { "if": "chronic renal failure (no dialysis)", "max_g_per_kg_per_day": 1.2, "citation_ref_paper": [88] },
+      { "if": "old age, inactivity, OR systemic inflammation present", "target_g_per_kg_per_day": "1.2 – 1.5 (anabolic-resistance compensation)", "citation_ref_paper": [76, 77, 78, 79] },
+      { "if": "advanced cancer cachexia and metabolic studies considered", "target_g_per_kg_per_day": "approaching 2.0", "citation_ref_paper": [85, 86] }
+    ],
+    "amino_acid_quality": {
+      "general_rule": "For short-term support, ordinary high-quality animal/fish/dairy/plant protein is sufficient; specialized AA mixtures are not required.",
+      "BCAA_in_PN": "Some evidence for improved protein accretion and albumin synthesis in advanced intra-abdominal adenocarcinoma when PN is BCAA-enriched.",
+      "leucine_enriched_ONS_with_n3_FA": "Single small RCT: 40 g amino acids (0.48 g/kg) leucine + n-3 ONS increased muscle fractional synthetic rate vs 24 g standard.",
+      "citation": { "espen_section": "B2-2 'Composition of amino acid mixtures'", "page_in_journal": 21, "page_in_pdf": "11 of 38", "supporting_references_in_paper": [7, 89, 90, 91] }
+    },
+    "REE_to_nitrogen_ratio_for_PN_design": {
+      "physiologic_postabsorptive_mean_kcal_per_g_N": 130,
+      "practical_design_target_kcal_per_g_N": "≤ ~100 (because net AA utilization is < 100%)",
+      "citation": { "espen_section": "B2-2 commentary", "page_in_journal": 21, "page_in_pdf": "11 of 38", "supporting_references_in_paper": [80, 81, 82, 83] }
+    },
+    "glutamine_supplementation": {
+      "stance": "Controversial; routine glutamine supplementation NOT recommended outside trials.",
+      "citation_general": { "espen_section": "C3-3, C4-4, C2-4", "page_in_journal": "33-36", "page_in_pdf": "23-26 of 38", "supporting_references_in_paper": [92, 250, 251, 357, 369, 370] }
+    }
+  },
+
+  "macronutrient_composition": {
+    "primary_recommendation": {
+      "id": "B2-3",
+      "text": "In weight-losing cancer patients with insulin resistance we recommend to increase the ratio of energy from fat to energy from carbohydrates, to increase energy density and reduce glycemic load.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B2-3", "page_in_journal": 21, "page_in_pdf": "11 of 38", "supporting_references_in_paper": [93, 94, 95, 96, 97, 98, 99, 100, 101] }
+    },
+    "decision_rules": [
+      { "if": "weight-losing AND insulin-resistant / inflamed", "action": "Shift kcal toward fat; increase energy density of diet/ONS." },
+      { "if": "PN is required", "action": "Prefer to replace some glucose with lipid emulsions to limit hyperglycemia and positive water balance." },
+      { "if": "severe malnutrition with prolonged starvation", "action": "Beware of refeeding syndrome; advance carbohydrates SLOWLY over 4–7 days and supplement thiamine + electrolytes (see safety.refeeding_syndrome)." }
+    ],
+    "lipid_oxidation_in_cancer": "Endogenous fat oxidation is preserved or increased (0.7–1.9 g/kg/day, up to 60–80% of REE) in both weight-stable and weight-losing patients.",
+    "lipid_emulsion_choice_for_PN": {
+      "soy_based_n6_PUFA": "High n-6 PUFA may promote pro-inflammatory eicosanoids; questioned for chronic use.",
+      "olive_oil_based": "≈20% n-6 (covers EFA) + 65% oleic acid; lower pro-inflammatory burden.",
+      "n3_enriched_emulsions": "Down-regulate PGE2, modulate PPARs, suppress inflammatory gene expression; potentially less pro-inflammatory and immunosuppressive."
+    },
+    "citation_lipids": { "espen_section": "B2-3 commentary", "page_in_journal": 21, "page_in_pdf": "11 of 38", "supporting_references_in_paper": [101, 102, 103] },
+    "glucose_water_retention_caveat": "Glucose load → reduced renal sodium excretion → positive water balance (insulin-mediated antinatriuresis/antidiuresis). Relevant in cancer patients with SIADH-like physiology, nausea, or opioid use.",
+    "citation_glucose_water": { "espen_section": "B2-3 commentary", "page_in_journal": "21-22", "page_in_pdf": "11-12 of 38", "supporting_references_in_paper": [104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114] }
+  },
+
+  "vitamins_and_minerals": {
+    "primary_recommendation": {
+      "id": "B2-4",
+      "text": "Supply vitamins and minerals in amounts approximately equal to the RDA; discourage high-dose micronutrients in absence of specific deficiencies.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B2-4", "page_in_journal": 22, "page_in_pdf": "12 of 38", "supporting_references_in_paper": [115, 118, 119, 120, 121, 122] }
+    },
+    "specific_advice": [
+      { "topic": "Multivitamin-multimineral at physiological doses", "stance": "Useful and safe (incl. during chemo/RT)." },
+      { "topic": "Vitamin D", "stance": "Deficiency frequent in cancer patients; supplement to correct deficiency, but routine supplementation does not reduce skeletal/non-skeletal events by >15% in unselected populations." },
+      { "topic": "High-dose β-carotene / vitamin A / vitamin E", "stance": "AVOID — meta-analyses show slight excess mortality." },
+      { "topic": "Selenium > 140 µg/day", "stance": "AVOID in early prostate cancer (mortality x2.6 in observational data)." },
+      { "topic": "Antioxidant megadoses during exercise programs", "stance": "May abrogate exercise-induced insulin sensitivity gains." },
+      { "topic": "Vitamins C+E during prevention", "stance": "No effect on cancer incidence in 10-year RCT." }
+    ],
+    "PN_micronutrient_rule": "After >1 week of PN, vitamin and trace-element supplementation is OBLIGATORY unless contraindicated.",
+    "citation_general": { "espen_section": "B2-4 commentary", "page_in_journal": "22-23", "page_in_pdf": "12-13 of 38", "supporting_references_in_paper": [115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 135, 136, 139, 140, 141, 142, 143, 144, 145, 146] }
+  },
+
+  "intervention_decision_logic": {
+    "general_principle": {
+      "id": "B3-1",
+      "text": "We recommend nutritional intervention to increase oral intake in cancer patients who are able to eat but are malnourished or at risk of malnutrition. This includes dietary advice, treatment of nutrition impact symptoms, and ONS.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Moderate",
+      "citation": { "espen_section": "B3-1", "page_in_journal": 23, "page_in_pdf": "13 of 38", "supporting_references_in_paper": [42, 153, 156] }
+    },
+    "harmful_diets_to_avoid": {
+      "id": "B3-2",
+      "text": "Do NOT use dietary provisions that restrict energy intake in patients with or at risk of malnutrition.",
+      "examples_to_avoid": ["Fad/restrictive diets", "Strict ketogenic diets in advanced cancer (low palatability → weight loss; no clinical efficacy)", "Prolonged fasting around chemotherapy outside trials"],
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B3-2", "page_in_journal": 24, "page_in_pdf": "14 of 38", "supporting_references_in_paper": [158, 159, 160, 161, 162, 163, 164, 165, 178, 179, 180, 181, 182, 183, 184, 185, 186] }
+    },
+    "feeding_route_algorithm": {
+      "id": "B3-3",
+      "text": "If a decision has been made to feed a patient, recommend enteral nutrition if oral nutrition remains inadequate despite counselling and ONS, and parenteral nutrition if enteral is not sufficient or feasible.",
+      "ordered_steps": [
+        { "step": 1, "intervention": "Dietary counselling by trained nutrition professional + treat nutrition-impact symptoms" },
+        { "step": 2, "intervention": "Energy- and protein-enriched diet with small frequent meals + texture/density modification" },
+        { "step": 3, "intervention": "Oral Nutritional Supplements (ONS)" },
+        { "step": 4, "intervention": "Enteral tube feeding (NG short-term <30 d; PEG/PEJ longer)" },
+        { "step": 5, "intervention": "Parenteral Nutrition — full or supplemental" }
+      ],
+      "trigger_for_artificial_nutrition": "Patient unable to eat for >1 week OR oral intake <60% of requirement for >1–2 weeks (see definitions.inadequate_food_intake).",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Moderate",
+      "citation": { "espen_section": "B3-3", "page_in_journal": 24, "page_in_pdf": "14 of 38", "supporting_references_in_paper": [147, 187, 188, 189, 190, 191, 192, 193] }
+    },
+    "PEG_vs_NG_for_RT_head_neck": "Body weight maintained similarly; PEG has lower dislodgement risk and possibly better QoL; NG has less dysphagia and earlier weaning. Similar pneumonia/infection risk.",
+    "home_artificial_nutrition": {
+      "id": "B3-5",
+      "text": "In patients with chronic insufficient dietary intake and/or uncontrollable malabsorption, recommend home artificial nutrition (enteral or parenteral) in suitable patients.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "selection_factors": ["cognitive ability", "physical ability", "home environment", "rehabilitation potential", "social/economic factors", "reimbursement"],
+      "citation": { "espen_section": "B3-5", "page_in_journal": 25, "page_in_pdf": "15 of 38", "supporting_references_in_paper": [190, 192, 207, 208, 209, 210] }
+    }
+  },
+
+  "exercise_recommendations": {
+    "primary": {
+      "id": "B4-1",
+      "text": "Maintain or increase physical activity in cancer patients to support muscle mass, physical function and metabolic pattern.",
+      "typical_prescription": "Supervised or home-based moderate-intensity (50–75% of baseline maximum heart rate or aerobic capacity), 3 sessions/week, 10–60 min/session.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "High",
+      "citation": { "espen_section": "B4-1", "page_in_journal": 25, "page_in_pdf": "15 of 38", "supporting_references_in_paper": [211, 212, 213, 214, 215, 216] }
+    },
+    "type": {
+      "id": "B4-2",
+      "text": "Suggest individualized resistance exercise in addition to aerobic exercise to maintain muscle strength and mass.",
+      "strength_of_recommendation": "WEAK",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B4-2", "page_in_journal": 26, "page_in_pdf": "16 of 38" }
+    }
+  },
+
+  "pharmaconutrients_and_drugs": {
+    "corticosteroids_for_appetite": {
+      "id": "B5-1",
+      "text": "Consider corticosteroids to increase appetite of anorectic advanced-cancer patients for a restricted period (1–3 weeks); be aware of muscle wasting, insulin resistance, infections.",
+      "examples_doses_studied": [
+        "methylprednisolone 32–125 mg/day for 1–8 weeks",
+        "prednisolone 10 mg/day for 6 weeks",
+        "dexamethasone 3–8 mg/day for 4 days to time of death"
+      ],
+      "strength_of_recommendation": "WEAK",
+      "level_of_evidence": "High",
+      "citation": { "espen_section": "B5-1", "page_in_journal": 26, "page_in_pdf": "16 of 38", "supporting_references_in_paper": [221, 222, 223, 224] }
+    },
+    "progestins_for_appetite": {
+      "id": "B5-2",
+      "text": "Consider progestins (megestrol acetate, medroxyprogesterone) to increase appetite; be aware of thromboembolism and other side effects.",
+      "doses_studied": "MA 160–1600 mg/day (optimal 480–800 mg/day); MPA 300–1200 mg/day for 6–12 weeks.",
+      "effect": "Increase appetite and body weight (mostly fat, not lean mass).",
+      "strength_of_recommendation": "WEAK",
+      "level_of_evidence": "High",
+      "citation": { "espen_section": "B5-2", "page_in_journal": "26-27", "page_in_pdf": "16-17 of 38", "supporting_references_in_paper": [221, 225, 226, 227] }
+    },
+    "cannabinoids": {
+      "id": "B5-3",
+      "stance": "Insufficient consistent clinical data to recommend.",
+      "strength_of_recommendation": "—",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B5-3", "page_in_journal": 27, "page_in_pdf": "17 of 38" }
+    },
+    "androgens_for_muscle_mass": {
+      "id": "B5-4",
+      "stance": "Insufficient consistent clinical data to recommend currently approved androgenic steroids.",
+      "strength_of_recommendation": "—",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B5-4", "page_in_journal": 27, "page_in_pdf": "17 of 38" }
+    },
+    "amino_acid_supplements_HMB_BCAA": {
+      "id": "B5-5",
+      "stance": "Insufficient consistent clinical data to recommend BCAA / HMB / leucine routinely for fat-free mass gain.",
+      "strength_of_recommendation": "—",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B5-5", "page_in_journal": 28, "page_in_pdf": "18 of 38" }
+    },
+    "NSAIDs": {
+      "id": "B5-6",
+      "stance": "Insufficient consistent clinical data to recommend NSAIDs for body-weight improvement.",
+      "strength_of_recommendation": "—",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B5-6", "page_in_journal": 28, "page_in_pdf": "18 of 38" }
+    },
+    "n3_fatty_acids_fish_oil": {
+      "id": "B5-7",
+      "text": "In patients with advanced cancer undergoing chemotherapy and at risk of weight loss or malnourished, suggest supplementation with long-chain n-3 fatty acids or fish oil to stabilize/improve appetite, intake, lean mass and body weight.",
+      "doses_with_clinical_benefit": "≥ 2 g/day EPA (fish oil typically 4–6 g/day).",
+      "safety": "EPA+DHA up to 5 g/day, EPA alone up to 1.8 g/day are safe in adults (EFSA 2012). Avoid fish oil concomitantly with ibrutinib (epistaxis).",
+      "strength_of_recommendation": "WEAK",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B5-7", "page_in_journal": 29, "page_in_pdf": "19 of 38", "supporting_references_in_paper": [64, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 285, 286, 287, 288, 289, 291] }
+    },
+    "prokinetics_for_early_satiety": {
+      "id": "B5-8",
+      "text": "After diagnosing/treating constipation, consider prokinetics (metoclopramide, domperidone) for early satiety; aware of CNS effects (metoclopramide) and QT prolongation (domperidone).",
+      "strength_of_recommendation": "WEAK",
+      "level_of_evidence": "Moderate",
+      "citation": { "espen_section": "B5-8", "page_in_journal": 30, "page_in_pdf": "20 of 38", "supporting_references_in_paper": [46, 304, 305, 306, 307, 308, 309, 310, 311, 312] }
+    }
+  },
+
+  "patient_subgroups": {
+    "surgery": {
+      "ERAS": {
+        "id": "C1-1",
+        "text": "All cancer patients undergoing curative or palliative surgery should be managed within an ERAS programme; every patient screened for malnutrition; if at risk give additional nutritional support.",
+        "ERAS_components": ["Avoid fasting", "Pre-op fluid + carbohydrate loading", "Recommence oral diet on first post-op day", "Minimal opiate pain control", "Early mobilization", "Minimal-access (laparoscopic) surgery where possible"],
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "High",
+        "citation": { "espen_section": "C1-1", "page_in_journal": 30, "page_in_pdf": "20 of 38", "supporting_references_in_paper": [313, 314, 315, 316, 317] }
+      },
+      "multimodal_oncology_pathway": {
+        "id": "C1-2",
+        "text": "For patients undergoing repeated surgery within multimodal oncologic pathway, manage each surgical episode within an ERAS program.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C1-2", "page_in_journal": 31, "page_in_pdf": "21 of 38" }
+      },
+      "post_surgical_care": {
+        "id": "C1-3",
+        "text": "In surgical cancer patients at risk of or already malnourished, give appropriate nutritional support during hospitalisation AND after discharge.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Moderate",
+        "classic_risk_thresholds": { "weight_loss_pct": ">10", "albumin_g_per_L": "<30" },
+        "citation": { "espen_section": "C1-3", "page_in_journal": 31, "page_in_pdf": "21 of 38", "supporting_references_in_paper": [318, 319, 320, 321] }
+      },
+      "immunonutrition": {
+        "id": "C1-4",
+        "text": "In upper-GI cancer patients undergoing surgical resection in the context of TRADITIONAL perioperative care, recommend oral/enteral immunonutrition (arginine, n-3 fatty acids, nucleotides).",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "High",
+        "citation": { "espen_section": "C1-4", "page_in_journal": 31, "page_in_pdf": "21 of 38", "supporting_references_in_paper": [322] }
+      }
+    },
+    "radiotherapy": {
+      "ensure_intake": {
+        "id": "C2-1",
+        "text": "During RT (especially head/neck, thorax, GI), ensure adequate nutritional intake primarily via individualized counselling and/or ONS to avoid deterioration, maintain intake, avoid RT interruptions.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Moderate",
+        "follow_up_advice": "In head-and-neck RT: weekly dietitian contact during RT and follow-up every 2 weeks for ≥6 weeks (COSA).",
+        "citation": { "espen_section": "C2-1", "page_in_journal": "31-32", "page_in_pdf": "21-22 of 38", "supporting_references_in_paper": [44, 45, 152, 155, 157, 323, 324, 325, 326, 327, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 339, 340] }
+      },
+      "tube_feeding": {
+        "id": "C2-2",
+        "text": "Use enteral feeding via NG or percutaneous tubes (e.g. PEG) in radiation-induced severe mucositis or obstructive head-neck/thorax tumors.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C2-2", "page_in_journal": 32, "page_in_pdf": "22 of 38" }
+      },
+      "swallowing_function": {
+        "id": "C2-3",
+        "text": "Screen for and manage dysphagia; encourage and educate patients to maintain swallowing during enteral nutrition.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C2-3", "page_in_journal": 32, "page_in_pdf": "22 of 38" }
+      },
+      "glutamine_for_mucositis": {
+        "id": "C2-4",
+        "stance": "Insufficient consistent clinical data to recommend glutamine for radiation-induced enteritis/diarrhea/mucositis/esophagitis/skin toxicity.",
+        "strength_of_recommendation": "—",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C2-4", "page_in_journal": 33, "page_in_pdf": "23 of 38" }
+      },
+      "probiotics_for_diarrhea": {
+        "id": "C2-5",
+        "stance": "Insufficient consistent clinical data to recommend probiotics to reduce radiation-induced diarrhea.",
+        "strength_of_recommendation": "—",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C2-5", "page_in_journal": 33, "page_in_pdf": "23 of 38" }
+      },
+      "PN_in_RT": {
+        "id": "C2-6",
+        "text": "Do NOT use PN as a general treatment in RT; only if adequate oral/enteral nutrition is impossible (e.g. severe radiation enteritis or severe malabsorption).",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Moderate",
+        "citation": { "espen_section": "C2-6", "page_in_journal": 33, "page_in_pdf": "23 of 38", "supporting_references_in_paper": [190, 192, 193, 383, 384, 385] }
+      }
+    },
+    "medical_oncology_chemotherapy": {
+      "ensure_nutrition": {
+        "id": "C3-1",
+        "text": "During anticancer drug treatment ensure adequate nutritional intake AND maintain physical activity.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Very low",
+        "citation": { "espen_section": "C3-1", "page_in_journal": 34, "page_in_pdf": "24 of 38" }
+      },
+      "EN_PN": {
+        "id": "C3-2",
+        "text": "If oral intake is inadequate despite counselling/ONS in a patient on curative anticancer drug treatment, give supplemental EN, or PN if EN insufficient/impossible.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Very low",
+        "caveat": "Routine artificial nutrition in unselected CHT patients is HARMFUL (more complications +40%, more infections +16%, decreased tumour response −7%).",
+        "citation": { "espen_section": "C3-2", "page_in_journal": 34, "page_in_pdf": "24 of 38", "supporting_references_in_paper": [193, 337, 394, 395, 396] }
+      },
+      "glutamine": {
+        "id": "C3-3",
+        "stance": "Insufficient consistent clinical data to recommend glutamine during conventional cytotoxic or targeted therapy.",
+        "strength_of_recommendation": "—",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C3-3", "page_in_journal": 35, "page_in_pdf": "25 of 38" }
+      }
+    },
+    "high_dose_chemotherapy_HCT": {
+      "ensure_intake_and_activity": {
+        "id": "C4-1",
+        "text": "During intensive CHT and after stem-cell transplantation, maintain physical activity and ensure adequate nutritional intake; this may require EN and/or PN.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Very low",
+        "monitoring": "Screen at admission; assess weekly during HCT (intake, metabolism, activity).",
+        "citation": { "espen_section": "C4-1", "page_in_journal": 35, "page_in_pdf": "25 of 38", "supporting_references_in_paper": [402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413] }
+      },
+      "EN_vs_PN": {
+        "id": "C4-2",
+        "text": "If oral nutrition is inadequate, prefer enteral tube feeding to PN unless severe mucositis, intractable vomiting, ileus, severe malabsorption, protracted diarrhea, or symptomatic GI GvHD is present.",
+        "strength_of_recommendation": "WEAK",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C4-2", "page_in_journal": 36, "page_in_pdf": "26 of 38" }
+      },
+      "low_bacterial_diet": {
+        "id": "C4-3",
+        "stance": "Insufficient consistent clinical data to recommend a low-bacterial diet >30 days after allogeneic transplantation.",
+        "strength_of_recommendation": "—",
+        "level_of_evidence": "Low",
+        "preferred_alternative": "Strict adherence to general food-safety guidelines (hand washing, safe shopping/storage/preparation/cooking).",
+        "citation": { "espen_section": "C4-3", "page_in_journal": 36, "page_in_pdf": "26 of 38" }
+      },
+      "glutamine": {
+        "id": "C4-4",
+        "stance": "Insufficient consistent clinical data; potential safety signal of increased relapse rate (RR 2.91 in meta-analysis).",
+        "strength_of_recommendation": "—",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C4-4", "page_in_journal": 36, "page_in_pdf": "26 of 38", "supporting_references_in_paper": [369, 370, 425] }
+      }
+    },
+    "cancer_survivors": {
+      "physical_activity": {
+        "id": "C5-1",
+        "text": "Recommend that cancer survivors engage in regular physical activity.",
+        "specific_dose": "≥30 min (preferably 45–60 min) of moderate-to-vigorous activity on ≥5 days/week, including endurance AND strength exercise.",
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C5-1", "page_in_journal": 37, "page_in_pdf": "27 of 38", "supporting_references_in_paper": [124, 214, 409, 426, 427, 428, 429, 432] }
+      },
+      "body_weight_lifestyle": {
+        "id": "C5-2",
+        "text": "Maintain healthy weight (BMI 18.5–25 kg/m²) and a healthy lifestyle: physically active; diet based on vegetables, fruits, whole grains; low in saturated fat, red meat, alcohol.",
+        "BMI_target_kg_m2": { "min": 18.5, "max": 25 },
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C5-2", "page_in_journal": 37, "page_in_pdf": "27 of 38", "supporting_references_in_paper": [124, 432, 433, 436, 438, 439, 440, 441, 442, 444, 445, 446] }
+      }
+    },
+    "advanced_cancer_no_anticancer_treatment": {
+      "screening_and_assessment": {
+        "id": "C6-1",
+        "text": "Routinely screen all advanced-cancer patients for inadequate intake, weight loss, and low BMI; if at risk, assess further for treatable nutrition impact symptoms and metabolic derangements.",
+        "objective_data_to_record": ["current BMI", "% weight loss over preceding 2–6 months", "performance status", "inflammatory status (CRP, albumin)"],
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C6-1", "page_in_journal": 38, "page_in_pdf": "28 of 38" }
+      },
+      "nutrition_support_decision": {
+        "id": "C6-2",
+        "text": "Offer/implement nutritional interventions in advanced-cancer patients only after considering, with the patient, the prognosis, the expected benefit on QoL and possibly survival, and the burden of nutritional care.",
+        "decision_matrix": [
+          { "if_expected_survival": "months to years", "action": "Provide adequate energy + protein, mitigate metabolic derangements, maintain performance and QoL; if unable to eat, artificial nutrition may improve survival." },
+          { "if_expected_survival": "few to several weeks", "action": "Use non-invasive interventions; focus on psychosocial and existential support." },
+          { "criteria_favoring_full_nutrition_support": ["expected survival ≥ several months", "low tumor activity / no inflammation (CRP < 10 mg/dL)"], "citation_ref_paper": [453, 454, 455] },
+          { "criteria_against_aggressive_nutrition_support": ["rapidly progressive disease despite oncologic therapy", "activated systemic inflammation", "ECOG = 3 (consider individually)"] }
+        ],
+        "strength_of_recommendation": "STRONG",
+        "level_of_evidence": "Low",
+        "citation": { "espen_section": "C6-2", "page_in_journal": 38, "page_in_pdf": "28 of 38", "supporting_references_in_paper": [193, 204, 206, 389, 393, 394, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 460, 461, 462, 463, 464, 475] }
+      }
+    },
+    "terminal_dying_phase": {
+      "id": "C6-3",
+      "text": "In dying patients, base treatment on comfort. Artificial hydration and nutrition are unlikely to provide benefit for most patients. In acute confusional states, a short, limited hydration trial (≈24 h) may rule out dehydration as a precipitant.",
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "key_clinical_facts": [
+        "Hunger is rare in imminently dying patients; minimal amounts of desired food can suffice.",
+        "Routine hydration shows no improvement / only limited effects on symptoms or QoL in imminently dying cancer patients.",
+        "Artificial hydration is NOT for thirst palliation or mouth dryness — use oral care."
+      ],
+      "citation": { "espen_section": "C6-3", "page_in_journal": 39, "page_in_pdf": "29 of 38", "supporting_references_in_paper": [205, 206, 465, 466, 467, 468, 469, 470, 471, 472, 473] }
+    }
+  },
+
+  "safety": {
+    "refeeding_syndrome": {
+      "id": "B3-4",
+      "definition": "Potentially fatal shifts in fluids and electrolytes in severely malnourished patients on refeeding (oral, enteral, or parenteral). Hallmark = hypophosphatemia; also abnormal Na/fluid balance, hypokalemia, hypomagnesemia, thiamine deficiency, glucose/protein/fat-metabolism shifts.",
+      "risk_indicator": "Minimal food intake for ≥5 days.",
+      "starting_calories_rule": [
+        { "if": "minimal intake ≥5 days", "starting_kcal_per_day": "≤ 50% of calculated requirement for the first 2 days" },
+        { "if": "severe depletion", "starting_kcal_per_kg_per_day": "5–10, then slowly increase over 4–7 days to full requirement" }
+      ],
+      "monitoring": ["volume status", "fluid balance", "heart rate and rhythm", "clinical status"],
+      "supplements_required": [
+        { "nutrient": "thiamine (vitamin B1)", "dose": "200–300 mg/day before and during repletion" },
+        { "nutrient": "balanced micronutrient mixture" },
+        { "nutrient": "potassium (K+)", "requirement_mmol_per_kg_per_day": [2, 4] },
+        { "nutrient": "phosphate (PO4)", "requirement_mmol_per_kg_per_day": [0.3, 0.6] },
+        { "nutrient": "magnesium (Mg) — IV", "requirement_mmol_per_kg_per_day": 0.2 },
+        { "nutrient": "magnesium (Mg) — oral", "requirement_mmol_per_kg_per_day": 0.4 }
+      ],
+      "strength_of_recommendation": "STRONG",
+      "level_of_evidence": "Low",
+      "citation": { "espen_section": "B3-4", "page_in_journal": 25, "page_in_pdf": "15 of 38", "supporting_references_in_paper": [197, 198, 199, 200, 201, 202, 203] }
+    },
+    "contraindications_general": [
+      { "intervention": "Routine artificial nutrition during chemotherapy in unselected patients", "reason": "Net harm: more complications, more infections, decreased tumor response." },
+      { "intervention": "Strict ketogenic / fad / low-energy-density diets in patients at risk of malnutrition", "reason": "Risk of insufficient energy, fat, protein and micronutrient intake." },
+      { "intervention": "Aggressive artificial nutrition in dying patients", "reason": "No benefit; risk of metabolic distress." },
+      { "intervention": "Glutamine supplementation routinely in HCT", "reason": "Possible increase in relapse rate (RR 2.91 in meta-analysis)." }
+    ],
+    "tumor_growth_concern": {
+      "stance": "Theoretical arguments that nutrients 'feed the tumor' are NOT supported by evidence and should NOT be used to refuse, diminish, or stop feeding.",
+      "citation": { "espen_section": "A3 statement 11", "page_in_journal": 18, "page_in_pdf": "8 of 38", "supporting_references_in_paper": [7, 30, 31, 57] }
+    }
+  },
+
+  "monitoring_and_audit_indicators": {
+    "description": "ESPEN proposes audit indicators (each institution sets the threshold; suggested values shown).",
+    "indicators": [
+      { "indicator": "% of all cancer patients screened for malnutrition", "target": "≥80%" },
+      { "indicator": "% of high-risk screen → further nutritional assessment",  "target": "≥80%" },
+      { "indicator": "% of nutritional assessments that include muscle-mass estimation", "target": "≥80%" },
+      { "indicator": "% of high-risk patients receiving nutrition therapy to improve energy + protein intake", "target": "≥80%" },
+      { "indicator": "% of patients on nutrition therapy reassessed after 1–4 weeks", "target": "≥80%" },
+      { "indicator": "% of patients on nutrition therapy ALSO receiving muscle-mass intervention", "target": "≥80%" },
+      { "indicator": "% of major-surgery patients managed within ERAS", "target": "≥80%" },
+      { "indicator": "% of RT/CHT tube-fed patients supported to maintain swallowing", "target": "≥80%" },
+      { "indicator": "% of CHT patients with average energy intake <80% of requirement per month", "target": "≤20%" },
+      { "indicator": "% of cancer patients receiving artificial nutrition in terminal/dying phase", "target": "≤90%" }
+    ],
+    "citation": { "espen_section": "O3.4", "page_in_journal": 16, "page_in_pdf": "5-6 of 38" }
+  },
+
+  "all_recommendations_index": [
+    { "id": "B1-1", "topic": "Screening", "strength": "STRONG", "evidence": "Very low", "page_in_journal": 19 },
+    { "id": "B1-2", "topic": "Assessment", "strength": "STRONG", "evidence": "Very low", "page_in_journal": 19 },
+    { "id": "B2-1", "topic": "Energy requirements (25–30 kcal/kg/day)", "strength": "STRONG", "evidence": "Low", "page_in_journal": 20 },
+    { "id": "B2-2", "topic": "Protein requirement (>1, up to 1.5 g/kg/day)", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 21 },
+    { "id": "B2-3", "topic": "Choice of energy substrates (↑ fat:CHO in insulin-resistant cachexia)", "strength": "STRONG", "evidence": "Low", "page_in_journal": 21 },
+    { "id": "B2-4", "topic": "Vitamins and trace elements at RDA", "strength": "STRONG", "evidence": "Low", "page_in_journal": 22 },
+    { "id": "B3-1", "topic": "Efficacy of nutritional intervention", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 23 },
+    { "id": "B3-2", "topic": "Avoid potentially harmful diets", "strength": "STRONG", "evidence": "Low", "page_in_journal": 24 },
+    { "id": "B3-3", "topic": "Modes of nutrition: when to escalate", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 24 },
+    { "id": "B3-4", "topic": "Refeeding syndrome", "strength": "STRONG", "evidence": "Low", "page_in_journal": 25 },
+    { "id": "B3-5", "topic": "Home artificial nutrition", "strength": "STRONG", "evidence": "Low", "page_in_journal": 25 },
+    { "id": "B4-1", "topic": "Exercise in combination with nutrition", "strength": "STRONG", "evidence": "High", "page_in_journal": 25 },
+    { "id": "B4-2", "topic": "Type of exercise (resistance + aerobic)", "strength": "WEAK", "evidence": "Low", "page_in_journal": 26 },
+    { "id": "B5-1", "topic": "Corticosteroids to increase appetite", "strength": "WEAK", "evidence": "High", "page_in_journal": 26 },
+    { "id": "B5-2", "topic": "Progestins to increase appetite", "strength": "WEAK", "evidence": "High", "page_in_journal": 27 },
+    { "id": "B5-3", "topic": "Cannabinoids", "strength": "—", "evidence": "Low", "page_in_journal": 27 },
+    { "id": "B5-4", "topic": "Androgens", "strength": "—", "evidence": "Low", "page_in_journal": 27 },
+    { "id": "B5-5", "topic": "Amino acids / HMB / BCAA", "strength": "—", "evidence": "Low", "page_in_journal": 28 },
+    { "id": "B5-6", "topic": "NSAIDs for body weight", "strength": "—", "evidence": "Low", "page_in_journal": 28 },
+    { "id": "B5-7", "topic": "n-3 fatty acids / fish oil", "strength": "WEAK", "evidence": "Low", "page_in_journal": 29 },
+    { "id": "B5-8", "topic": "Prokinetics for early satiety", "strength": "WEAK", "evidence": "Moderate", "page_in_journal": 30 },
+    { "id": "C1-1", "topic": "Surgery: ERAS care", "strength": "STRONG", "evidence": "High", "page_in_journal": 30 },
+    { "id": "C1-2", "topic": "Surgery: multimodal oncology pathway", "strength": "STRONG", "evidence": "Low", "page_in_journal": 31 },
+    { "id": "C1-3", "topic": "Surgery: post-surgical and post-discharge care", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 31 },
+    { "id": "C1-4", "topic": "Surgery: immunonutrition (upper GI)", "strength": "STRONG", "evidence": "High", "page_in_journal": 31 },
+    { "id": "C2-1", "topic": "RT: ensure adequate intake", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 31 },
+    { "id": "C2-2", "topic": "RT: tube feeding", "strength": "STRONG", "evidence": "Low", "page_in_journal": 32 },
+    { "id": "C2-3", "topic": "RT: maintain swallowing function", "strength": "STRONG", "evidence": "Low", "page_in_journal": 32 },
+    { "id": "C2-4", "topic": "RT: glutamine for mucositis/enteritis", "strength": "—", "evidence": "Low", "page_in_journal": 33 },
+    { "id": "C2-5", "topic": "RT: probiotics for diarrhea", "strength": "—", "evidence": "Low", "page_in_journal": 33 },
+    { "id": "C2-6", "topic": "RT: PN only for severe enteritis/malabsorption", "strength": "STRONG", "evidence": "Moderate", "page_in_journal": 33 },
+    { "id": "C3-1", "topic": "Medical oncology: ensure adequate nutrition", "strength": "STRONG", "evidence": "Very low", "page_in_journal": 34 },
+    { "id": "C3-2", "topic": "Medical oncology: EN/PN if oral intake inadequate", "strength": "STRONG", "evidence": "Very low", "page_in_journal": 34 },
+    { "id": "C3-3", "topic": "Medical oncology: glutamine", "strength": "—", "evidence": "Low", "page_in_journal": 35 },
+    { "id": "C4-1", "topic": "HCT: ensure nutrition + activity", "strength": "STRONG", "evidence": "Very low", "page_in_journal": 35 },
+    { "id": "C4-2", "topic": "HCT: prefer EN over PN unless GI complication", "strength": "WEAK", "evidence": "Low", "page_in_journal": 36 },
+    { "id": "C4-3", "topic": "HCT: low bacterial diet", "strength": "—", "evidence": "Low", "page_in_journal": 36 },
+    { "id": "C4-4", "topic": "HCT: glutamine", "strength": "—", "evidence": "Low", "page_in_journal": 36 },
+    { "id": "C5-1", "topic": "Survivors: regular physical activity", "strength": "STRONG", "evidence": "Low", "page_in_journal": 37 },
+    { "id": "C5-2", "topic": "Survivors: BMI 18.5–25 + healthy lifestyle", "strength": "STRONG", "evidence": "Low", "page_in_journal": 37 },
+    { "id": "C6-1", "topic": "Advanced cancer: screening and assessment", "strength": "STRONG", "evidence": "Low", "page_in_journal": 38 },
+    { "id": "C6-2", "topic": "Advanced cancer: individualized nutrition support", "strength": "STRONG", "evidence": "Low", "page_in_journal": 38 },
+    { "id": "C6-3", "topic": "Terminal/dying phase: comfort care", "strength": "STRONG", "evidence": "Low", "page_in_journal": 39 }
+  ],
+
+  "reasoning_logic_for_agent": {
+    "energy_target_pseudocode": [
+      "INPUT: weight_kg, height_cm, BMI, age, sex, ECOG, weight_loss_pct_6mo, treatment_phase, kidney_function, CRP, current_intake_kcal, severe_malnutrition_flag",
+      "STEP 1 (refeeding gate): IF severe_malnutrition_flag OR (current_intake_kcal/required_kcal < 0.5 for >=5 days) THEN start at 5–10 kcal/kg/day, advance over 4–7 days, supplement thiamine 200–300 mg/day + electrolytes (K 2–4, PO4 0.3–0.6, Mg 0.2 IV / 0.4 PO mmol/kg/day). [B3-4]",
+      "STEP 2 (default target): kcal_target = body_weight_kg × choose_in_range(25, 30) [B2-1]",
+      "STEP 3 (obesity adjust): IF BMI > 30 THEN kcal_target = adjusted_body_weight_kg × 22–25 (avoid overfeeding).",
+      "STEP 4 (cachexia/inflammation upweight): IF weight-losing AND CRP elevated THEN keep kcal_target at upper end of 25–30; consider energy-dense fat-shifted formula [B2-3].",
+      "STEP 5 (subgroup overrides): apply patient_subgroups.<treatment_phase> rules.",
+      "STEP 6 (titration): reassess weight + muscle mass at 1–4 weeks; raise/lower kcal_target by 10–20% to stabilise weight and FFM [B2-1 commentary]."
+    ],
+    "protein_target_pseudocode": [
+      "INPUT: kidney_function, age, inflammation, weight_kg",
+      "default = 1.2 × weight_kg g/day; aim 1.5; safe up to 2.0 g/kg if normal kidneys [B2-2].",
+      "IF kidney_function == 'acute_failure' THEN cap at 1.0 g/kg/day.",
+      "IF kidney_function == 'chronic_failure' (no dialysis) THEN cap at 1.2 g/kg/day.",
+      "IF age >= 65 OR inflammation OR inactivity THEN aim 1.2–1.5 g/kg/day (anabolic-resistance compensation)."
+    ],
+    "macronutrient_pseudocode": [
+      "IF weight_losing AND insulin_resistance THEN increase fat:CHO ratio; choose energy-dense fat-shifted ONS [B2-3].",
+      "IF PN required THEN consider olive-oil or n-3-enriched lipid emulsions over pure soy emulsions; design admixture so kcal:nitrogen ≤ ~100 [B2-2 / B2-3].",
+      "IF starvation refeeding THEN advance carbohydrates SLOWLY over 4–7 days [B3-4]."
+    ],
+    "feeding_route_pseudocode": [
+      "step1 = nutritional_counselling + symptom_management",
+      "IF after step1 intake still inadequate THEN step2 = fortified diet + ONS",
+      "IF after step2 intake still inadequate AND functional gut THEN step3 = enteral tube feeding (NG <30d, PEG/PEJ longer)",
+      "IF gut not functional OR EN insufficient THEN step4 = parenteral nutrition (full or supplemental) [B3-3]"
+    ],
+    "subgroup_dispatch_table": [
+      { "treatment_phase": "curative_surgery", "must_apply": ["C1-1 ERAS", "C1-3 post-discharge support if at risk", "C1-4 immunonutrition if upper-GI in traditional perioperative care"] },
+      { "treatment_phase": "curative_RT", "must_apply": ["C2-1 counselling/ONS", "C2-2 tube feeding if severe mucositis/obstruction", "C2-3 swallowing maintenance", "C2-6 PN only for severe enteritis"] },
+      { "treatment_phase": "curative_CHT", "must_apply": ["C3-1 ensure intake + activity", "C3-2 supplemental EN→PN if intake inadequate"] },
+      { "treatment_phase": "palliative_CHT", "must_apply": ["C3-1", "C3-2", "consider B5-7 n-3 fatty acids if weight-losing"] },
+      { "treatment_phase": "HCT", "must_apply": ["C4-1 weekly screening + activity", "C4-2 prefer EN unless GI complication"] },
+      { "treatment_phase": "advanced_no_treatment", "must_apply": ["C6-1 screening", "C6-2 prognosis-weighted decision"] },
+      { "treatment_phase": "survivor", "must_apply": ["C5-1 ≥150–300 min/wk MVPA + strength", "C5-2 BMI 18.5–25 + plant-forward diet"] },
+      { "treatment_phase": "terminal", "must_apply": ["C6-3 comfort-only; no routine artificial nutrition/hydration; oral care for thirst"] }
+    ],
+    "citation_template_for_agent_responses": "When citing in chat, format as: '[ESPEN 2017, {recommendation_id} ({strength_of_recommendation}, {level_of_evidence} evidence), Clin Nutr 36:{page_in_journal}; doi:10.1016/j.clnu.2016.07.015]'."
+  }
+}

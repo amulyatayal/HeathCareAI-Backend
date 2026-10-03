@@ -64,14 +64,25 @@ async def chat(
         
         user_id = None
         if authorization and authorization.startswith("Bearer "):
-            # Google OAuth - decode JWT to get user info
+            # Google OAuth — decode JWT to get user info
             token = authorization.replace("Bearer ", "")
             try:
-                import jwt
-                # Decode without verification for user extraction (verification done by frontend)
-                decoded = jwt.decode(token, options={"verify_signature": False})
-                user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
-                logger.info(f"Authenticated user from JWT: {user_id}")
+                if settings.patient_bearer_legacy_jwt_decode:
+                    import jwt
+
+                    # Decode without verification for user extraction (verification done by frontend)
+                    decoded = jwt.decode(token, options={"verify_signature": False})
+                    user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
+                    logger.info(f"Authenticated user from JWT: {user_id}")
+                else:
+                    from services.patient_jwt import get_patient_token_identity
+
+                    ident = get_patient_token_identity(token, settings)
+                    if ident:
+                        user_id = ident[0]
+                        logger.info(f"Authenticated user from JWT: {user_id}")
+                    else:
+                        user_id = "oauth_user"
             except Exception as jwt_error:
                 logger.warning(f"Could not decode JWT: {jwt_error}")
                 user_id = "oauth_user"

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anvega.health/schemas/recipes_full.schema.json",
+  "title": "Recipe Knowledge File",
+  "description": "Canonical structure for the recipe knowledge file (recipes_full.json). Field names are aligned with data/intent_qa/nutrition_kb.json wherever the concept matches, so both knowledge files share one vocabulary. Use this as the reference contract for any future recipe ingestion.",
+  "type": "object",
+  "required": ["version", "generated_at", "generator", "source", "statistics", "sections", "recipes"],
+  "properties": {
+    "version": { "type": "string", "description": "Schema/content version of this file." },
+    "generated_at": { "type": "string", "format": "date-time", "description": "UTC ISO-8601 timestamp the file was produced." },
+    "generator": { "type": "string", "description": "Script that produced the file (e.g. parse_recipes.py)." },
+    "source": { "type": "string", "description": "Human-readable provenance of the data." },
+    "source_file": { "type": "string", "description": "Original source filename (e.g. the PDF)." },
+    "statistics": {
+      "type": "object",
+      "description": "Roll-up counts for quick inspection (mirrors nutrition_kb.json.statistics).",
+      "properties": {
+        "total_recipes": { "type": "integer" },
+        "complete_recipes": { "type": "integer", "description": "Recipes with both ingredients and instructions." },
+        "metadata_only_recipes": { "type": "integer", "description": "Recipes with nutrition/clinical info but no ingredients/instructions." },
+        "with_images": { "type": "integer" },
+        "categories_covered": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "The source book's sections and the recipe-number range each covers.",
+      "items": {
+        "type": "object",
+        "required": ["slug", "label", "from", "to"],
+        "properties": {
+          "slug": { "type": "string" },
+          "label": { "type": "string" },
+          "from": { "type": "integer" },
+          "to": { "type": "integer" }
+        }
+      }
+    },
+    "recipes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recipe" }
+    }
+  },
+  "$defs": {
+    "recipe": {
+      "type": "object",
+      "description": "A single recipe. Field names match nutrition_kb.json where the concept is shared (title, description, dietary_tags, symptom_support, instructions, clinical_notes, nutrition, meal_type, cuisine_type, texture_class, servings, prep_time_mins, cook_time_mins, allergen_info, tips, recipe_id, created_at). Book-specific richer fields (recipe_number, emoji, category, stages, nutrition_detail, source citation, image, has_full_recipe) are retained.",
+      "required": ["recipe_id", "title", "meal_type", "dietary_tags", "allergens", "ingredients", "instructions", "nutrition"],
+      "properties": {
+        "recipe_id":      { "type": "string", "description": "Stable id, e.g. 'recipe-001'. [nutrition_kb: recipe_id; was 'id']" },
+        "recipe_number":  { "type": "integer", "description": "1-based position in the source book. [book-specific]" },
+        "title":          { "type": "string", "description": "Recipe name. [nutrition_kb: title; was 'name']" },
+        "emoji":          { "type": "string", "description": "Display emoji by category. [book-specific]" },
+        "meal_type":      { "type": "string", "description": "breakfast | soup | main | salad | snack | smoothie | dessert. [nutrition_kb: meal_type]" },
+        "cuisine_type":   { "type": ["string", "null"], "description": "Cuisine, null when unspecified by source. [nutrition_kb: cuisine_type]" },
+        "category":       { "type": "string", "description": "Source book section slug (e.g. main_vegetarian). [book-specific]" },
+        "category_label": { "type": "string", "description": "Human label for the section. [book-specific]" },
+
+        "dietary_tags":   { "type": "array", "items": { "type": "string" }, "description": "Diet tags, e.g. ['vegan']. [nutrition_kb: dietary_tags; was 'diets']" },
+        "allergens":      { "type": "array", "items": { "type": "string" }, "description": "Structured allergen tags for filtering (dairy, gluten, nuts, soy, egg, fish, shellfish, sesame). [book-specific; derived]" },
+        "allergen_info":  { "type": "string", "description": "Human summary, e.g. 'Contains dairy, gluten' or 'None'. [nutrition_kb: allergen_info]" },
+        "symptom_support":{ "type": "array", "items": { "type": "string" }, "description": "Side-effect/symptom support tags. [nutrition_kb: symptom_support; was 'side_effect_support']" },
+        "texture_class":  { "type": ["string", "null"], "description": "regular | soft | liquid | null. [nutrition_kb: texture_class]" },
+        "stages":         { "type": "array", "items": { "type": "string" }, "description": "Breast-cancer tumour stages the recipe suits (I–IV). NOTE: distinct from nutrition_kb 'treatment_stages' (treatment phase). [book-specific]" },
+        "stage_display_names": { "type": "array", "items": { "type": "string" }, "description": "Display labels for stages, e.g. 'Stage I'." },
+
+        "description":    { "type": "string", "description": "Short blurb. [nutrition_kb: description; was 'desc']" },
+        "clinical_notes": { "type": "string", "description": "Clinical significance / evidence text. [nutrition_kb: clinical_notes; was 'clinical_significance']" },
+        "ingredients":    { "type": "array", "items": { "type": "string" }, "description": "Ingredient lines. Empty when the source omits them. [shared name]" },
+        "instructions":   { "type": "array", "items": { "type": "string" }, "description": "Method steps. Empty when the source omits them. [nutrition_kb: instructions; was 'steps']" },
+        "tips":           { "type": ["string", "null"], "description": "Serving/preparation tips, null when absent. [nutrition_kb: tips]" },
+        "has_full_recipe":{ "type": "boolean", "description": "True only when both ingredients and instructions are present. [book-specific]" },
+
+        "servings":       { "type": ["integer", "null"], "description": "[nutrition_kb: servings] null when unspecified." },
+        "prep_time_mins": { "type": ["integer", "null"], "description": "[nutrition_kb: prep_time_mins] null when unspecified." },
+        "cook_time_mins": { "type": ["integer", "null"], "description": "[nutrition_kb: cook_time_mins] null when unspecified." },
+
+        "nutrition": {
+          "type": "object",
+          "description": "Flat per-serving scalars (nutrition_kb shape). sugar_g/sodium_mg are null when the source nutrition table lacks those rows.",
+          "properties": {
+            "calories_per_serving": { "type": ["integer", "null"] },
+            "protein_g": { "type": ["number", "null"] },
+            "fiber_g":   { "type": ["number", "null"] },
+            "fat_g":     { "type": ["number", "null"] },
+            "carbs_g":   { "type": ["number", "null"] },
+            "sugar_g":   { "type": ["number", "null"] },
+            "sodium_mg": { "type": ["number", "null"] }
+          }
+        },
+        "nutrition_detail": {
+          "type": "object",
+          "description": "Rich per-nutrient evidence from the source (book-specific). Keys: energy_kcal, protein_g, carbohydrates_g, dietary_fibre_g, total_fat_g, calcium_mg, iron_mg, magnesium_mg, potassium_mg, folate_ug, vitamin_c_mg, stage_suitability.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "amount": { "type": "string", "description": "e.g. '~320 kcal', '~59–66 g'." },
+              "daily_target": { "type": "string", "description": "Recommended daily target text." },
+              "sources": { "type": "array", "items": { "type": "string" }, "description": "Cited guideline references." }
+            }
+          }
+        },
+
+        "source": {
+          "type": "object",
+          "description": "The recipe's own citation (distinct from top-level provenance). [book-specific]",
+          "properties": {
+            "title": { "type": "string" },
+            "url": { "type": "string" },
+            "page": { "type": ["integer", "null"], "description": "Page in the source PDF." }
+          }
+        },
+        "image":       { "type": ["string", "null"], "description": "Relative path to the recipe photo, e.g. 'images/recipe-001.png', or null. [book-specific]" },
+        "created_at":  { "type": "string", "format": "date-time", "description": "[nutrition_kb: created_at]" },
+        "data_source": { "type": "string", "description": "Provenance string for this record." }
+      }
+    }
+  }
+}

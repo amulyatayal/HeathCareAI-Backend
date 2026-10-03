@@ -28,6 +28,7 @@ from config.agent_routing import (
     is_citation_only
 )
 from services.knowledge_base import KnowledgeBaseService
+from services.retrieval_query_builder import build_retrieval_query
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,10 @@ class RetrievalAgent(BaseAgent):
         Returns:
             Updated context with retrieval_result populated
         """
-        logger.info(f"RetrievalAgent processing query: {context.user_message[:50]}...")
+        retrieval_query = build_retrieval_query(context)
+        context.metadata["retrieval_query"] = retrieval_query
+
+        logger.info(f"RetrievalAgent processing query: {retrieval_query[:80]}...")
         
         # Get intent from context (default to UNKNOWN if not classified)
         intent = IntentCategory.UNKNOWN

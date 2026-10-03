@@ -8,12 +8,13 @@ Uses only user-provided data (no inference).
 
 import logging
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, Any, Dict
 from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
 
+from config.aws import get_dynamodb_resource
 from config.settings import settings
 from config.pipeline_config import PatientStage
 from models.patient_profile import (
@@ -39,7 +40,7 @@ class PatientProfileService:
     
     def __init__(self):
         self.table_name = "PatientProfiles"
-        self.dynamodb = boto3.resource('dynamodb', region_name=settings.aws_region)
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.table_name)
     
     async def get_profile(self, user_id: str) -> Optional[PatientProfile]:
@@ -112,6 +113,34 @@ class PatientProfileService:
         if profile:
             return profile
         return await self.create_profile(user_id)
+
+    async def upsert_explicit_mandatory_fields(
+        self,
+        user_id: str,
+        fields: Dict[str, Any],
+    ) -> PatientProfile:
+        """
+        Merge user-provided mandatory pipeline fields into explicit_data.
+
+        Used when the user supplies values in chat that should persist in DynamoDB.
+        Note: weight is intentionally not stored in PatientProfile; it is stored in
+        biomarker snapshots only.
+        """
+        profile = await self.get_or_create_profile(user_id)
+        now = datetime.utcnow()
+
+        if profile.explicit_data is None:
+            profile.explicit_data = PatientExplicitData()
+
+        profile.updated_at = now
+
+        try:
+            self.table.put_item(Item=profile.to_dynamodb_item())
+            logger.info(f"Updated explicit mandatory fields for user {user_id}: {list(fields.keys())}")
+            return profile
+        except ClientError as e:
+            logger.error(f"Error upserting explicit fields for {user_id}: {e}")
+            raise
     
     async def save_onboarding(
         self, 
@@ -268,24 +297,24 @@ class PatientProfileService:
         Raises:
             ValueError: If profile not found
         """
-        profile = await self.get_profile(user_id)
+        # Row may not exist yet; create minimal profile before pathway write.
+        profile = await self.get_or_create_profile(user_id)
         if not profile:
             raise ValueError(f"Profile not found for user {user_id}")
-        
         now = datetime.utcnow()
         
         # Update detailed stage
         profile.detailed_stage_id = detailed_stage_id
         profile.detailed_stage_updated_at = now
         profile.updated_at = now
-        
+
         try:
             self.table.put_item(Item=profile.to_dynamodb_item())
             logger.info(
                 f"Updated detailed stage for user {user_id}: {detailed_stage_id}"
             )
             return profile
-            
+
         except ClientError as e:
             logger.error(f"Error updating detailed stage for {user_id}: {e}")
             raise
@@ -402,7 +431,13 @@ class PatientProfileService:
         item = convert_decimals(item)
         
         # Parse datetime strings
-        for key in ['created_at', 'updated_at', 'stage_updated_at', 'onboarding_completed_at']:
+        for key in [
+            'created_at',
+            'updated_at',
+            'stage_updated_at',
+            'onboarding_completed_at',
+            'detailed_stage_updated_at',
+        ]:
             if item.get(key) and isinstance(item[key], str):
                 try:
                     item[key] = datetime.fromisoformat(item[key].replace('Z', '+00:00'))

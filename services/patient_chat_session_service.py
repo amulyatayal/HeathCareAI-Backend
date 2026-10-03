@@ -43,7 +43,11 @@ class PatientChatSessionService:
 
     def __init__(self):
         self.table_name = TABLE_NAME
-        self.dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
+        # Use the shared resource builder so .env credentials (loaded by
+        # pydantic-settings, not visible to boto3's default chain) are passed
+        # explicitly — matches Bedrock/S3 behavior in config/aws.py.
+        from config.aws import get_dynamodb_resource
+        self.dynamodb = get_dynamodb_resource()
         self.table = self.dynamodb.Table(self.table_name)
 
     def _now_ms(self) -> int:

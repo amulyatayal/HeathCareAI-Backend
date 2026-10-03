@@ -7,6 +7,9 @@ import logging
 
 from fastapi import HTTPException, Request
 
+from config import settings as app_settings
+from services.patient_jwt import get_patient_token_identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,18 +33,23 @@ async def get_authenticated_user_id(request: Request) -> str:
         token = auth_header[7:]
 
         try:
-            from jwt import decode
-            decoded = decode(token, options={"verify_signature": False})
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                from jwt import decode
 
-            user_id = (
-                decoded.get("sub") or
-                decoded.get("user_id") or
-                decoded.get("uid")
-            )
+                decoded = decode(token, options={"verify_signature": False})
 
-            if user_id:
-                return user_id
+                user_id = (
+                    decoded.get("sub")
+                    or decoded.get("user_id")
+                    or decoded.get("uid")
+                )
 
+                if user_id:
+                    return user_id
+            else:
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    return ident[0]
         except Exception as e:
             logger.error(f"Token verification failed: {e}")
 
@@ -65,11 +73,17 @@ async def get_user_id_allowing_guest(request: Request) -> str:
     if auth_header and auth_header.startswith("Bearer "):
         try:
             token = auth_header[7:]
-            from jwt import decode
-            decoded = decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
-            if user_id:
-                return user_id
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                from jwt import decode
+
+                decoded = decode(token, options={"verify_signature": False})
+                user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+                if user_id:
+                    return user_id
+            else:
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    return ident[0]
         except Exception:
             pass
 

@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Clinical parameter categorization thresholds. Half-open intervals: a value matches a bin when min <= value < max. 'min' or 'max' = null means unbounded on that side.",
+  "metrics": {
+    "BMI": {
+      "unit": "kg/m^2",
+      "stratify_by": ["standard"],
+      "default_context": { "standard": "indian_icmr" },
+      "rules": {
+        "who": [
+          { "label": "Underweight",     "min": null, "max": 18.5, "risk": "high" },
+          { "label": "Normal",          "min": 18.5, "max": 25.0, "risk": "normal" },
+          { "label": "Overweight",      "min": 25.0, "max": 30.0, "risk": "borderline" },
+          { "label": "Obese Class I",   "min": 30.0, "max": 35.0, "risk": "high" },
+          { "label": "Obese Class II",  "min": 35.0, "max": 40.0, "risk": "high" },
+          { "label": "Obese Class III", "min": 40.0, "max": null, "risk": "very_high" }
+        ],
+        "indian_icmr": [
+          { "label": "Underweight",    "min": null, "max": 18.5, "risk": "high" },
+          { "label": "Normal",         "min": 18.5, "max": 23.0, "risk": "normal" },
+          { "label": "Overweight",     "min": 23.0, "max": 25.0, "risk": "borderline" },
+          { "label": "Obese Class I",  "min": 25.0, "max": 30.0, "risk": "high" },
+          { "label": "Obese Class II", "min": 30.0, "max": null, "risk": "very_high" }
+        ]
+      },
+      "source": "WHO TRS 894 (2000); ICMR-NIN 2020; WHO Asia-Pacific (2004)"
+    },
+
+    "Waist_Circumference_cm": {
+      "unit": "cm",
+      "stratify_by": ["standard", "sex"],
+      "default_context": { "standard": "indian_icmr" },
+      "rules": {
+        "who": {
+          "female": [
+            { "label": "Normal",          "min": null, "max": 80.0, "risk": "normal" },
+            { "label": "Increased Risk",  "min": 80.0, "max": 88.0, "risk": "borderline" },
+            { "label": "Substantially Increased Risk", "min": 88.0, "max": null, "risk": "high" }
+          ],
+          "male": [
+            { "label": "Normal",          "min": null, "max": 94.0, "risk": "normal" },
+            { "label": "Increased Risk",  "min": 94.0, "max": 102.0, "risk": "borderline" },
+            { "label": "Substantially Increased Risk", "min": 102.0, "max": null, "risk": "high" }
+          ]
+        },
+        "indian_icmr": {
+          "female": [
+            { "label": "Normal",          "min": null, "max": 80.0, "risk": "normal" },
+            { "label": "Central Obesity", "min": 80.0, "max": null, "risk": "high" }
+          ],
+          "male": [
+            { "label": "Normal",          "min": null, "max": 90.0, "risk": "normal" },
+            { "label": "Central Obesity", "min": 90.0, "max": null, "risk": "high" }
+          ]
+        }
+      },
+      "source": "WHO STEPS (2008); IDF South-Asian (2009); ICMR-NIN 2020"
+    },
+
+    "Hand_Grip_Strength_kg": {
+      "unit": "kg",
+      "stratify_by": ["sex", "age_band"],
+      "age_bands": [
+        { "id": "18-49", "min": 18, "max": 49 },
+        { "id": "50+",   "min": 50, "max": 200 }
+      ],
+      "rules": {
+        "female": {
+          "18-49": [
+            { "label": "Weakness", "min": null, "max": 16.0, "risk": "high" },
+            { "label": "Low",      "min": 16.0, "max": 20.0, "risk": "borderline" },
+            { "label": "Normal",   "min": 20.0, "max": null, "risk": "normal" }
+          ],
+          "50+": [
+            { "label": "Weakness", "min": null, "max": 14.0, "risk": "high" },
+            { "label": "Low",      "min": 14.0, "max": 18.0, "risk": "borderline" },
+            { "label": "Normal",   "min": 18.0, "max": null, "risk": "normal" }
+          ]
+        },
+        "male": {
+          "18-49": [
+            { "label": "Weakness", "min": null, "max": 27.0, "risk": "high" },
+            { "label": "Low",      "min": 27.0, "max": 33.0, "risk": "borderline" },
+            { "label": "Normal",   "min": 33.0, "max": null, "risk": "normal" }
+          ],
+          "50+": [
+            { "label": "Weakness", "min": null, "max": 24.0, "risk": "high" },
+            { "label": "Low",      "min": 24.0, "max": 30.0, "risk": "borderline" },
+            { "label": "Normal",   "min": 30.0, "max": null, "risk": "normal" }
+          ]
+        }
+      },
+      "source": "EWGSOP2 weakness cutoffs (Cruz-Jentoft 2019); 'Low' band tightened for South-Asian normative data"
+    },
+
+    "PG_SGA_Score": {
+      "unit": "score",
+      "rules": [
+        { "label": "A - Well-nourished",          "min": 0,  "max": 2,    "risk": "normal" },
+        { "label": "B - Moderately Malnourished", "min": 2,  "max": 9,    "risk": "high" },
+        { "label": "C - Severely Malnourished",   "min": 9,  "max": null, "risk": "very_high" }
+      ],
+      "source": "Ottery FD, Patient-Generated SGA (PG-SGA) scoring (2006)"
+    }
+  }
+}

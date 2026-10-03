@@ -1,0 +1,69 @@
+{
+  "document_title": "ESPEN Dietary Requirement Mandatory Inputs",
+  "summary_scope": "Essential data points required to provide personalized dietary recommendations for cancer patients based on ESPEN guidelines[cite: 1, 86].",
+  "sections": [
+    {
+      "section_id": 1,
+      "title": "Patient Demographics",
+      "items": [
+        { "label": "Age", "rationale": "Nutritional needs vary by age[cite: 3]." },
+        { "label": "Gender", "rationale": "Impacts energy and nutrient requirements[cite: 4]." },
+        { "label": "Body Metrics", "fields": ["Weight", "Height", "BMI", "Waist circumference", "Hand Grip Strength"], "rationale": "Used to assess nutritional status[cite: 5, 6, 7]." }
+      ]
+    },
+    {
+      "section_id": 2,
+      "title": "Medical History",
+      "items": [
+        { "label": "Cancer Type and Stage", "rationale": "Determines metabolic impact and specific nutritional needs[cite: 9]." },
+        { "label": "Treatment Type", "categories": ["Surgery", "Chemotherapy", "Radiotherapy", "Palliative care"], "rationale": "Influences the type of nutritional support required[cite: 10]." },
+        { "label": "Comorbidities", "examples": ["Diabetes", "Cardiovascular disease", "Renal failure"], "rationale": "May affect specific dietary restrictions[cite: 11]." }
+      ]
+    },
+    {
+      "section_id": 3,
+      "title": "Nutritional Status & Symptoms",
+      "items": [
+        { "label": "Weight History", "rationale": "Tracks percentage of weight loss over 1–6 months[cite: 13]." },
+        { "label": "Food Intake", "rationale": "Assesses current habits, preferences, and intolerances[cite: 14]." },
+        { "label": "Nutrition Impact Symptoms", "symptoms": ["Anorexia", "Dysphagia", "Nausea/vomiting", "Diarrhea/constipation", "Oral mucositis", "Xerostomia", "Taste alterations", "Pain during eating"], "rationale": "Symptoms that directly interfere with food consumption[cite: 15, 16, 17, 18, 19, 20, 21, 22, 23]." }
+      ]
+    },
+    {
+      "section_id": 4,
+      "title": "Metabolic and Biochemical Parameters",
+      "items": [
+        { "label": "Resting Energy Expenditure (REE)", "rationale": "Measured or estimated to determine caloric needs[cite: 37]." },
+        { "label": "Inflammatory Markers", "markers": ["C-reactive protein (CRP)", "Albumin"], "rationale": "Indicators of systemic inflammation[cite: 38]." },
+        { "label": "Electrolytes", "markers": ["Sodium", "Potassium", "Magnesium", "Phosphate"], "rationale": "Critical for identifying refeeding syndrome risk[cite: 39]." }
+      ]
+    },
+    {
+      "section_id": 5,
+      "title": "Clinical Assessment & Performance",
+      "items": [
+        { "label": "Screening Tools", "validated_tools": ["NRS-2002", "MUST", "MST", "PG-SGA"], "rationale": "Standardized methods to assess malnutrition risk[cite: 66, 67, 68, 69, 70]." },
+        { "label": "Performance Status", "scales": ["WHO/ECOG", "Karnofsky Performance Scale"], "rationale": "Assesses physical function[cite: 72]." },
+        { "label": "Physical Activity Level (PAL)", "rationale": "Used to estimate Total Energy Expenditure (TEE)[cite: 73]." }
+      ]
+    },
+    {
+      "section_id": 6,
+      "title": "Prognosis and Goals",
+      "items": [
+        { "label": "Expected Survival", "rationale": "Categorized as short-term or long-term[cite: 41]." },
+        { "label": "Goals of Care", "categories": ["Curative", "Palliative", "End-of-life"], "rationale": "Aligns nutrition with overall medical objectives[cite: 42]." },
+        { "label": "Patient Preferences", "rationale": "Incorporates individual expectations and willingness to adhere to plans[cite: 43]." }
+      ]
+    }
+  ],
+  "mandatory_input_checklist": [
+    "Age, gender, weight, height (BMI) [cite: 79]",
+    "Cancer type and stage [cite: 80]",
+    "Treatment type [cite: 81]",
+    "Recent weight changes [cite: 82]",
+    "Current food intake and symptoms [cite: 83]",
+    "Inflammatory markers (CRP, albumin) [cite: 84]",
+    "Performance status [cite: 85]"
+  ]
+}

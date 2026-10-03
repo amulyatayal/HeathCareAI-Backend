@@ -36,6 +36,7 @@ from config.pipeline_config import (
     PATIENT_STAGES
 )
 from config.agent_routing import KnowledgeBase
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +90,9 @@ async def chat_v2(
     - Built-in safety guardrails
     - Sign-in prompts for guest users on stage-sensitive queries
     
-    Headers:
-    - Authorization: Bearer <token> for authenticated users
-    - X-User-ID: guest_xxx for guest users
+    Headers (all optional for chat):
+    - Authorization: Bearer <token> for signed-in users (loads profile)
+    - X-User-ID: optional guest session id (no login required)
     
     Query Parameters:
     - include_trace: Set to true to include detailed agent execution trace
@@ -99,8 +100,8 @@ async def chat_v2(
     start_time = time.time()
     
     try:
-        # Extract user identity from headers
-        user_id, is_guest = _extract_user_identity(authorization, x_user_id)
+        # Resolve signed-in user vs guest (guests never require OAuth; see resolve_chat_user_identity)
+        user_id, is_guest = resolve_chat_user_identity(authorization, x_user_id)
 
         chat_session = None
         conversation_history = request.conversation_history
@@ -485,6 +486,31 @@ async def get_intent_routing(intent: str):
 
 from typing import Tuple
 
+def resolve_chat_user_identity(
+    authorization: Optional[str],
+    x_user_id: Optional[str],
+) -> Tuple[Optional[str], bool]:
+    """
+    Resolve user id + guest flag for chat.
+
+    - **Guests** never require OAuth: no Bearer is fine. Optional ``X-User-ID`` for session
+      tracking. Fully anonymous requests (no headers) are still allowed as guest.
+    - **Signed-in users**: ``Authorization: Bearer <JWT>`` yields ``(uid, is_guest=False)``.
+    - **Test bypass** (``IS_AUTHENTICATION_REQUIRED=N``): when there is no Bearer and no
+      ``X-User-ID``, assign ``unauthenticated_test_user_id`` so automated tests get a stable id.
+
+    Chat never returns 401 solely for missing auth headers.
+    """
+    settings = get_settings()
+    user_id, is_guest = _extract_user_identity(authorization, x_user_id)
+
+    # Test / integration bypass: synthetic id only when flag is N and request is fully anonymous
+    if not settings.chat_authentication_required:
+        if user_id is None and not (x_user_id and str(x_user_id).strip()):
+            return settings.unauthenticated_test_user_id, True
+    return user_id, is_guest
+
+
 def _extract_user_identity(
     authorization: Optional[str],
     x_user_id: Optional[str]
@@ -494,34 +520,50 @@ def _extract_user_identity(
     
     Returns:
         (user_id, is_guest) tuple:
-        - For authenticated users: (firebase_uid, False)
-        - For guest users: (None, True)
+        - For authenticated users: (uid from JWT, False)
+        - For guest users with X-User-ID: (guest session id, True)
+        - For fully anonymous guest: (None, True)
     """
     logger.info(f"_extract_user_identity called: auth={authorization[:50] if authorization else None}...")
     
     if authorization and authorization.startswith("Bearer "):
         try:
-            import jwt
+            from config import settings as app_settings
+
             token = authorization.replace("Bearer ", "")
             logger.info(f"Attempting to decode JWT token (len={len(token)})")
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
-            user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
-            logger.info(f"Extracted user_id: {user_id}")
-            if user_id:
-                logger.info(f"Authenticated user from JWT: {user_id}")
-                return (user_id, False)
-            else:
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                import jwt
+
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
+                user_id = decoded.get("sub") or decoded.get("user_id") or decoded.get("uid")
+                logger.info(f"Extracted user_id: {user_id}")
+                if user_id:
+                    logger.info(f"Authenticated user from JWT: {user_id}")
+                    return (user_id, False)
                 logger.warning(f"No user_id found in JWT claims: {decoded}")
+            else:
+                from services.patient_jwt import get_patient_token_identity
+
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    user_id, decoded = ident[0], ident[1]
+                    logger.info(f"JWT decoded successfully: {list(decoded.keys())}")
+                    logger.info(f"Authenticated user from JWT: {user_id}")
+                    return (user_id, False)
+                logger.warning("No user_id found or token not accepted")
         except Exception as jwt_error:
             logger.warning(f"Could not decode JWT: {jwt_error}")
     else:
         logger.info(f"No valid Bearer token found (auth={authorization})")
     
-    # Guest user (X-User-ID is for session tracking, not profile)
-    if x_user_id:
-        logger.debug(f"Guest user with session ID: {x_user_id}")
-    
+    # Guest: optional X-User-ID for session tracking (no OAuth required)
+    if x_user_id and str(x_user_id).strip():
+        gid = str(x_user_id).strip()
+        logger.debug(f"Guest user with session ID: {gid}")
+        return (gid, True)
+
     return (None, True)
 
 
@@ -534,15 +576,27 @@ def _extract_user_id(
     """Extract user ID from request headers (legacy - for logging)."""
     if authorization and authorization.startswith("Bearer "):
         try:
-            import jwt
+            from config import settings as app_settings
+
             token = authorization.replace("Bearer ", "")
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
-            logger.debug(f"Authenticated user from JWT: {user_id}")
-            return user_id or "oauth_user"
+            if app_settings.patient_bearer_legacy_jwt_decode:
+                import jwt
+
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                user_id = decoded.get("sub") or decoded.get("email") or decoded.get("user_id")
+                logger.debug(f"Authenticated user from JWT: {user_id}")
+                return user_id or "oauth_user"
+            else:
+                from services.patient_jwt import get_patient_token_identity
+
+                ident = get_patient_token_identity(token, app_settings)
+                if ident:
+                    user_id = ident[0]
+                    logger.debug(f"Authenticated user from JWT: {user_id}")
+                    return user_id
         except Exception as jwt_error:
             logger.warning(f"Could not decode JWT: {jwt_error}")
-            return "oauth_user"
+        return "oauth_user"
     elif x_user_id:
         logger.debug(f"Guest user from X-User-ID header: {x_user_id}")
         return x_user_id

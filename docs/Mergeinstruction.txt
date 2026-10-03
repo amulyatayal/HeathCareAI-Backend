@@ -1,0 +1,62 @@
+How to Pull the Latest Changes from 'main' into Your Branch (Without Losing Your Work)
+Source: Medium article by Rashmi Mohapatra
+(Branch name below is set to: rajat-Mar24)
+
+Situation:
+- You're working on your feature branch: rajat-Mar24
+- You've made local changes that aren't pushed yet
+- Meanwhile 'main' has moved on
+- You want your branch in sync with main but want to keep your changes intact
+
+Step 1: Check that you're on the right branch
+    git branch
+
+If you're not on rajat-Mar24, switch to it:
+    git checkout rajat-Mar24
+
+Step 2: Save your local changes
+If you've made changes, commit them so they're not lost:
+    git add .
+    git status
+    git commit -m "WIP: local changes on rajat-Mar24"
+
+Not ready to commit yet? Stash them temporarily instead:
+    git stash
+
+Step 3: Get the latest from 'main'
+Jump over to the main branch:
+    git checkout main
+
+Then pull the latest changes from the remote repo:
+    git pull origin main
+
+This ensures your local 'main' is fully up-to-date.
+
+Step 4: Go back to your feature branch (rajat-Mar24)
+    git checkout rajat-Mar24
+
+Step 5: Merge main into rajat-Mar24
+Bring the latest 'main' changes into your branch:
+    git merge main
+
+Git will try to combine your branch (rajat-Mar24) with the updated main.
+
+Got Conflicts?
+Git will flag the conflicting files. Open them up and resolve the conflicts
+(they're marked with <<<<<<<, =======, and >>>>>>>), then:
+    git add .
+    git status
+    git commit -m "Merged main into rajat-Mar24 with conflict resolution"
+
+That's it! You've brought the latest updates from 'main' into your branch
+without overwriting your work.
+
+Prefer a Clean History?
+You can use 'rebase' instead of 'merge' for a neater commit timeline:
+    git rebase main
+
+This makes your branch look like it was built directly on top of the latest
+'main'. Be careful with rebasing in shared branches — it's best for
+local-only work.
+</content>
+</invoke>

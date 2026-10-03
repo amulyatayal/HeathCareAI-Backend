@@ -70,8 +70,6 @@ class PatientExplicitData(BaseModel):
         None,
         description="When treatment ended (if applicable)"
     )
-
-
 # ================================
 # Stage History
 # ================================
