@@ -113,3 +113,24 @@ def test_shellfish_filter_end_to_end():
     from services.recipe_service import _normalise_allergen
     new, _ = merge(doc_with(), [rr(allergens_uk=["molluscs"])])
     assert "shellfish" in {_normalise_allergen(a) for a in new["recipes"][0]["allergens"]}
+
+
+def test_synonyms_map_to_app_vocabulary():
+    assert to_app_allergens(["soya", "milk", "eggs"]) == ["dairy", "egg", "soy"]
+    assert to_app_allergens(["cereals containing gluten", "tree nuts", "shell fish"]) == ["gluten", "nuts", "shellfish"]
+
+
+def test_unknown_allergen_on_approved_row_fails_closed():
+    with pytest.raises(ReviewError, match=r"recipe-100.*kiwi"):
+        merge(doc_with(), [rr(allergens_uk=["kiwi"])])
+
+
+def test_unknown_allergen_on_pending_row_ignored():
+    _, counts = merge(doc_with(), [rr(decision=None, allergens_uk=["kiwi"])])
+    assert counts["pending"] == 1
+
+
+def test_known_vocabulary_maps_into_app_vocabulary():
+    from scripts.recipe.apply_recipe_review import _KNOWN_UK
+    app = {"dairy", "gluten", "nuts", "soy", "egg", "fish", "shellfish", "sesame", "celery", "mustard", "lupin", "sulphites"}
+    assert set(to_app_allergens(sorted(_KNOWN_UK | {"mustard"}))) <= app

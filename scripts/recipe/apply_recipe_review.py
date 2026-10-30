@@ -86,8 +86,14 @@ import jsonschema
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECIPES = REPO_ROOT / "data" / "recipe" / "recipes_full.json"
 SCHEMA = REPO_ROOT / "data" / "recipe" / "recipes_full.schema.json"
-_TO_APP = {"crustaceans": "shellfish", "molluscs": "shellfish", "peanuts": "nuts"}
-_UK_LABEL = {"crustaceans": "crustaceans (shellfish)", "molluscs": "molluscs (shellfish)"}
+_TO_APP = {"crustaceans": "shellfish", "molluscs": "shellfish", "peanuts": "nuts",
+           "soya": "soy", "milk": "dairy", "eggs": "egg", "cereals containing gluten": "gluten",
+           "tree nuts": "nuts", "shell fish": "shellfish"}
+_UK_LABEL = {"crustaceans": "crustaceans (shellfish)", "molluscs": "molluscs (shellfish)",
+             "soya": "soy", "milk": "dairy", "eggs": "egg", "cereals containing gluten": "gluten",
+             "tree nuts": "nuts", "shell fish": "shellfish"}
+_KNOWN_UK = {"gluten", "dairy", "nuts", "egg", "fish", "soy", "celery", "sesame", "peanuts",
+             "crustaceans", "molluscs", "lupin", "sulphites", "mustard"} | set(_TO_APP)
 
 
 def to_app_allergens(uk: List[str]) -> List[str]:
@@ -123,6 +129,9 @@ def merge(doc: dict, rows: List[ReviewRow]) -> tuple[dict, dict]:
             continue
         if row.decision == "Approve with edits" and not row.corrections.startswith(APPLIED_MARK):
             raise ReviewError(f"{row.recipe_id}: corrections not applied to the recipe cells")
+        unknown = sorted(set(row.allergens_uk) - _KNOWN_UK)
+        if unknown:
+            raise ReviewError(f"{row.recipe_id}: unrecognised allergen '{unknown[0]}'")
         rec = by_id.get(row.recipe_id)
         if rec is None:
             raise ReviewError(f"{row.recipe_id}: not found in recipes_full.json")
