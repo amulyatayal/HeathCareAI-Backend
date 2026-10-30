@@ -113,8 +113,12 @@
         "image":       { "type": ["string", "null"], "description": "Relative path to the recipe photo, e.g. 'images/recipe-001.png', or null. [book-specific]" },
         "image_source": { "enum": ["book", "ai-generated", null], "description": "Where the image came from." },
         "review": { "type": "object", "description": "Clinical review of AI-drafted content.",
+          "required": ["decision", "reviewed_by", "date", "book_allergens"],
+          "additionalProperties": false,
           "properties": { "decision": { "enum": ["Approve", "Approve with edits"] },
-                          "reviewed_by": { "type": "string" }, "date": { "type": "string" } } },
+                          "reviewed_by": { "type": "string", "minLength": 1 },
+                          "date": { "type": "string", "minLength": 1 },
+                          "book_allergens": { "type": "array", "items": { "type": "string" }, "description": "Allergen tags the recipe book listed before the AI draft was merged." } } },
         "created_at":  { "type": "string", "format": "date-time", "description": "[nutrition_kb: created_at]" },
         "data_source": { "type": "string", "description": "Provenance string for this record." }
       }

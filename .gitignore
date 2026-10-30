@@ -135,3 +135,9 @@ tmp/
 temp/
 *.tmp
 
+
+# Confidential recipe review material — never commit
+data/recipe/review/
+data/recipe/*.xlsx
+data/recipe/*.pdf
+data/recipe/images_staging/
