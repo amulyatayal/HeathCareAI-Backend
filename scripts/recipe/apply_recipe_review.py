@@ -74,3 +74,85 @@ def read_review_rows(path: Path) -> List[ReviewRow]:
             reviewed_by=reviewer, review_date=str(get("Date") or "").strip()[:10],
         ))
     return out
+
+
+import argparse
+import copy
+import json
+from datetime import datetime, timezone
+
+import jsonschema
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RECIPES = REPO_ROOT / "data" / "recipe" / "recipes_full.json"
+SCHEMA = REPO_ROOT / "data" / "recipe" / "recipes_full.schema.json"
+_TO_APP = {"crustaceans": "shellfish", "molluscs": "shellfish", "peanuts": "nuts"}
+_UK_LABEL = {"crustaceans": "crustaceans (shellfish)", "molluscs": "molluscs (shellfish)"}
+
+
+def to_app_allergens(uk: List[str]) -> List[str]:
+    return sorted({_TO_APP.get(a, a) for a in uk})
+
+
+def allergen_info(uk: List[str], flags: str) -> str:
+    parts = ", ".join(_UK_LABEL.get(a, a) for a in sorted(uk))
+    text = f"Contains {parts}." if parts else "None of the 14 UK allergens."
+    if "POSSIBLE SULPHITES" in flags:
+        text += " May contain sulphites (check labels)."
+    return text
+
+
+def _recompute_stats(doc: dict) -> None:
+    recs = doc["recipes"]
+    complete = sum(1 for r in recs if r.get("has_full_recipe"))
+    doc["statistics"].update(total_recipes=len(recs), complete_recipes=complete,
+                             metadata_only_recipes=len(recs) - complete,
+                             with_images=sum(1 for r in recs if r.get("image")))
+
+
+def merge(doc: dict, rows: List[ReviewRow]) -> tuple[dict, dict]:
+    new = copy.deepcopy(doc)
+    by_id = {r["recipe_id"]: r for r in new["recipes"]}
+    counts = {"merged": 0, "pending": 0, "rejected": 0}
+    for row in rows:
+        if row.decision is None:
+            counts["pending"] += 1
+            continue
+        if row.decision == "Reject":
+            counts["rejected"] += 1
+            continue
+        if row.decision == "Approve with edits" and not row.corrections.startswith(APPLIED_MARK):
+            raise ReviewError(f"{row.recipe_id}: corrections not applied to the recipe cells")
+        rec = by_id.get(row.recipe_id)
+        if rec is None:
+            raise ReviewError(f"{row.recipe_id}: not found in recipes_full.json")
+        rec.update(
+            ingredients=row.ingredients, instructions=row.instructions, has_full_recipe=True,
+            servings=row.servings, prep_time_mins=row.prep_time_mins, cook_time_mins=row.cook_time_mins,
+            allergens=to_app_allergens(row.allergens_uk), allergen_info=allergen_info(row.allergens_uk, row.flags),
+            data_source="AI-drafted from the UK Diet and Supplementary Recipe Book entry; clinically reviewed",
+            review={"decision": row.decision, "reviewed_by": row.reviewed_by, "date": row.review_date},
+        )
+        counts["merged"] += 1
+    _recompute_stats(new)
+    return new, counts
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--workbook", required=True, type=Path)
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+    doc = json.loads(RECIPES.read_text())
+    new, counts = merge(doc, read_review_rows(args.workbook))
+    jsonschema.validate(new, json.loads(SCHEMA.read_text()))
+    print(f"merged={counts['merged']} pending={counts['pending']} rejected={counts['rejected']}")
+    if args.dry_run or new["recipes"] == doc["recipes"]:
+        return
+    new.update(version="1.1", generated_at=datetime.now(timezone.utc).isoformat(),
+               generator="parse_recipes.py + apply_recipe_review.py")
+    RECIPES.write_text(json.dumps(new, ensure_ascii=False, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    main()

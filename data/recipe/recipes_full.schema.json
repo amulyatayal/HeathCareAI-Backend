@@ -111,6 +111,10 @@
           }
         },
         "image":       { "type": ["string", "null"], "description": "Relative path to the recipe photo, e.g. 'images/recipe-001.png', or null. [book-specific]" },
+        "image_source": { "enum": ["book", "ai-generated", null], "description": "Where the image came from." },
+        "review": { "type": "object", "description": "Clinical review of AI-drafted content.",
+          "properties": { "decision": { "enum": ["Approve", "Approve with edits"] },
+                          "reviewed_by": { "type": "string" }, "date": { "type": "string" } } },
         "created_at":  { "type": "string", "format": "date-time", "description": "[nutrition_kb: created_at]" },
         "data_source": { "type": "string", "description": "Provenance string for this record." }
       }
